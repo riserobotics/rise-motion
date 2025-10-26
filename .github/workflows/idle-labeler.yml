@@ -1,0 +1,359 @@
+name: Idle labeler
+
+on:
+  issues:
+    types: [opened, edited, reopened, assigned, unassigned]
+  pull_request:
+    # includes closed & ready_for_review for PR->Issue logic
+    types: [opened, edited, reopened, assigned, unassigned, closed, ready_for_review]
+  schedule:
+    - cron: "17 2 * * *"   # daily sync (02:17 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  ensure-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure core labels exist (Idle, Assigned, Invalid, question, ready-for-review, merge-request-done, qa-staging)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            const labels = [
+              { name: 'Idle',                color: 'fbca04', description: 'No one is currently working on the issue, its sitting in the backlog...' },
+              { name: 'Assigned',            color: '0e8a16', description: 'Someone is assigned and working on this.' },
+              { name: 'Invalid',             color: 'e4e669', description: 'Issue/PR description is empty or non-actionable.' },
+              { name: 'question',            color: 'd876e3', description: 'More information is required.' },
+              { name: 'ready-for-review',    color: '0052cc', description: 'Related PR opened from the issue branch; ready for review.' },
+              { name: 'merge-request-done',  color: '1d76db', description: 'PR merged into main for this issue.' },
+              { name: 'qa-staging',          color: 'c5def5', description: 'Ready for QA on staging.' }
+            ];
+
+            for (const L of labels) {
+              try {
+                const { data: label } = await github.rest.issues.getLabel({ owner, repo, name: L.name });
+                const needsUpdate =
+                  (label.color?.toLowerCase() !== L.color.toLowerCase()) ||
+                  ((label.description || '') !== L.description);
+                if (needsUpdate) {
+                  await github.rest.issues.updateLabel({
+                    owner, repo, name: L.name, new_name: L.name, color: L.color, description: L.description
+                  });
+                }
+              } catch (e) {
+                if (e.status === 404) {
+                  await github.rest.issues.createLabel({
+                    owner, repo, name: L.name, color: L.color, description: L.description
+                  });
+                } else {
+                  throw e;
+                }
+              }
+            }
+
+  triage-event:
+    runs-on: ubuntu-latest
+    needs: ensure-label
+    # Only run for issue/pull_request events (not for schedule/workflow_dispatch)
+    if: ${{ github.event_name == 'issues' || github.event_name == 'pull_request' }}
+    steps:
+      - name: Add/Remove Idle & Assigned based on assignment (Issues & PRs)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            const item = context.payload.issue || context.payload.pull_request;
+            if (!item || !item.number) {
+              core.info('No issue or pull_request with number in payload; nothing to do.');
+              return;
+            }
+            const number = item.number;
+            const hasAssignees = Array.isArray(item.assignees) && item.assignees.length > 0;
+
+            async function addLabels(labels) {
+              if (!labels?.length) return;
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
+              } catch (e) {
+                if (e.status !== 422) throw e; // already present
+              }
+            }
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name });
+              } catch (e) {
+                if (e.status !== 404) throw e; // not present
+              }
+            }
+
+            if (hasAssignees) {
+              await removeLabel('Idle');
+              await addLabels(['Assigned']);
+            } else {
+              await removeLabel('Assigned');
+              await addLabels(['Idle']);
+            }
+
+      - name: Flag empty/too-short descriptions -> add Invalid/question, remove Doing/help-needed/merge-request-done, comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            const item = context.payload.issue || context.payload.pull_request;
+            if (!item || !item.number) {
+              core.info('No issue or pull_request with number in payload; nothing to do.');
+              return;
+            }
+            const number = item.number;
+            const body = (item.body || '').trim();
+            const isInvalid = body.length < 10; // empty OR < 10 chars
+
+            if (!isInvalid) {
+              core.info('Description is sufficiently long; nothing to flag.');
+              return;
+            }
+
+            // Helpers
+            async function addLabels(labels) {
+              if (!labels?.length) return;
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
+              } catch (e) {
+                if (e.status !== 422) throw e;
+              }
+            }
+            async function removeLabel(name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+            }
+
+            // 1) Label updates
+            await addLabels(['Invalid', 'question']);
+            await removeLabel('Doing');
+            await removeLabel('help-needed');
+            await removeLabel('merge-request-done');
+
+            // 2) Leave an idempotent comment to avoid duplicates
+            const NOTICE = [
+              'Descriptions that are empty or contain no useful content are not allowed and have to be reworked.',
+              'Please update the description with enough detail (context, steps, expected/actual behaviour).',
+              '<!-- short-desc-check -->'
+            ].join(' ');
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner, repo, issue_number: number, per_page: 50, sort: 'created', direction: 'desc'
+              });
+              const alreadyNotified = comments?.some(c => typeof c.body === 'string' && c.body.includes('<!-- short-desc-check -->'));
+              if (!alreadyNotified) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: NOTICE });
+              } else {
+                core.info('Notification comment already present; skipping.');
+              }
+            } catch (e) {
+              core.warning(`Could not check/post comment: ${e.message}`);
+            }
+
+      - name: When PR comes from branch with "#<issue>" -> label the Issue ready-for-review and remove Doing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.info('Not a pull_request event; skipping.');
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const pr = context.payload.pull_request;
+            const action = context.payload.action;
+
+            // Trigger on PR creation/updates where branch context is relevant
+            const triggerActions = ['opened', 'reopened', 'edited', 'ready_for_review'];
+            if (!pr || !triggerActions.includes(action)) {
+              core.info(`Action ${action} not in ${triggerActions.join(', ')}; skipping.`);
+              return;
+            }
+
+            const branch = pr.head?.ref || '';
+            // Extract numbers only when prefixed with '#', e.g., '#123'
+            const candidates = [...branch.matchAll(/#(\d+)/g)]
+              .map(m => parseInt(m[1], 10))
+              .filter(n => !Number.isNaN(n));
+
+            if (candidates.length === 0) {
+              core.info(`No '#<number>' token found in branch "${branch}"; skipping.`);
+              return;
+            }
+
+            // Resolve the first candidate that is an ISSUE (not a PR)
+            let issueNumber = null;
+            for (const cand of candidates) {
+              try {
+                const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: cand });
+                if (!issue.pull_request) {
+                  issueNumber = cand;
+                  break;
+                }
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+            }
+            if (!issueNumber) {
+              core.info('No matching issue found for #<number> in branch; skipping.');
+              return;
+            }
+
+            // Apply labels on the Issue
+            try {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['ready-for-review'] });
+            } catch (e) {
+              if (e.status !== 422) throw e;
+            }
+            try {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: 'Doing' });
+            } catch (e) {
+              if (e.status !== 404) throw e;
+            }
+
+      - name: When PR merged into main and branch contains "#<issue>" -> label the Issue merge-request-done + qa-staging
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.info('Not a pull_request event; skipping.');
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const pr = context.payload.pull_request;
+            const action = context.payload.action;
+            const TARGET_BASE = 'main';
+
+            // Only when PR got closed & merged into main
+            if (!(pr && action === 'closed' && pr.merged === true && (pr.base?.ref || '') === TARGET_BASE)) {
+              core.info('PR not merged into main; skipping.');
+              return;
+            }
+
+            const branch = pr.head?.ref || '';
+            // Extract numbers only when prefixed with '#', e.g., '#123'
+            const candidates = [...branch.matchAll(/#(\d+)/g)]
+              .map(m => parseInt(m[1], 10))
+              .filter(n => !Number.isNaN(n));
+
+            if (candidates.length === 0) {
+              core.info(`No '#<number>' token found in branch "${branch}"; skipping.`);
+              return;
+            }
+
+            // Resolve the first candidate that is an ISSUE (not a PR)
+            let issueNumber = null;
+            for (const cand of candidates) {
+              try {
+                const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: cand });
+                if (!issue.pull_request) {
+                  issueNumber = cand;
+                  break;
+                }
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+            }
+            if (!issueNumber) {
+              core.info('No matching issue found for #<number> in branch; skipping.');
+              return;
+            }
+
+            // Apply labels on the Issue
+            try {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['merge-request-done', 'qa-staging'] });
+            } catch (e) {
+              if (e.status !== 422) throw e;
+            }
+
+  nightly-sync:
+    runs-on: ubuntu-latest
+    needs: ensure-label
+    # Runs only on 'schedule' OR when started manually
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Label all currently unassigned Issues & PRs as Idle + cleanup Assigned/Idle
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            // Helpers
+            async function addLabels(number, labels) {
+              if (!labels?.length) return;
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
+              } catch (e) {
+                if (e.status !== 422) throw e;
+              }
+            }
+            async function removeLabel(number, name) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+            }
+
+            // 1) Unassigned -> add Idle, remove Assigned
+            const unassigned = await github.paginate(
+              github.rest.issues.listForRepo,
+              { owner, repo, state: 'open', assignee: 'none', per_page: 100 }
+            );
+            for (const it of unassigned) {
+              await addLabels(it.number, ['Idle']);
+              await removeLabel(it.number, 'Assigned');
+            }
+
+            // 2) Assigned -> add Assigned, remove Idle
+            const assigned = await github.paginate(
+              github.rest.issues.listForRepo,
+              { owner, repo, state: 'open', assignee: '*', per_page: 100 }
+            );
+            for (const it of assigned) {
+              await addLabels(it.number, ['Assigned']);
+              await removeLabel(it.number, 'Idle']);
+            }
+
+            // 3) Hygiene: correct Idle/Assigned based on current state
+            const withIdle = await github.paginate(
+              github.rest.issues.listForRepo,
+              { owner, repo, state: 'open', labels: 'Idle', per_page: 100 }
+            );
+            for (const it of withIdle) {
+              if (Array.isArray(it.assignees) && it.assignees.length > 0) {
+                await removeLabel(it.number, 'Idle');
+                await addLabels(it.number, ['Assigned']);
+              }
+            }
+
+            const withAssigned = await github.paginate(
+              github.rest.issues.listForRepo,
+              { owner, repo, state: 'open', labels: 'Assigned', per_page: 100 }
+            );
+            for (const it of withAssigned) {
+              if (!Array.isArray(it.assignees) || it.assignees.length === 0) {
+                await removeLabel(it.number, 'Assigned');
+                await addLabels(it.number, ['Idle']);
+              }
+            }

@@ -1,0 +1,16 @@
+name: Greetings
+
+on: [pull_request_target, issues]
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "Hey there! Great job on creating your first Issue! Please check the guidelines on how to do this here: https://riseos-docs-e1325d.gitlab-pages.tu-berlin.de/docs/contributing/devops/procedure/"
+        pr-message: "Awesome, you just created your first merge request! See the following link for some guidance infromation on the first merge request! https://riseos-docs-e1325d.gitlab-pages.tu-berlin.de/docs/contributing/devops/git/git-merge/"

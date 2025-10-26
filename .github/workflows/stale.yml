@@ -1,0 +1,39 @@
+name: Mark stale issues and pull requests
+
+on:
+  schedule:
+    - cron: '20 11 * * *'
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/stale@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Markierung nach 30 Tagen Inaktivität
+          days-before-stale: 30
+          days-before-issue-stale: 30
+          days-before-pr-stale: 30
+
+          # Schließen vollständig deaktivieren
+          days-before-close: -1
+          days-before-issue-close: -1
+          days-before-pr-close: -1
+
+          # Nachrichten/Labels für die Markierung
+          stale-issue-message: 'This issue did not get any activity for 30 days! Please revisit the issue and determine the best course of action!'
+          stale-pr-message: 'This pull request did not get any activity for the last 30 days. Please revisit if it can be merged, or if there are any changes that have to be made!'
+          stale-issue-label: 'triage'
+          stale-pr-label: 'triage'
+
+          # Optional: Entfernt das Stale-Label automatisch bei neuer Aktivität
+          remove-stale-when-updated: true
+
+          # Alle markierten Issues/PRs @paulwetzel zuweisen
+          assignees: 'paulwetzel'
