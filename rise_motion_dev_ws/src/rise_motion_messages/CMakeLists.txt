@@ -10,9 +10,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/msg_state_current.msg"
-  "msg/msg_state_notice.msg"
-  "srv/srv_enable_ethercat.srv"
+  "msg/StateCurrent.msg"
+  "msg/StateNotice.msg"
+  "srv/EnableEthercat.srv"
  )
 
 if(BUILD_TESTING)
