@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>rise-motion</name>
+  <name>rise_motion</name>
   <version>0.1.0</version>
   <description>A ROS2 wrapper around the SOEM and IgH EtherCAT driver for precise motion control in robotic exoskeletons.</description>
   <maintainer email="mt-TB-risemember@win.tu-berlin.de">Project RISE</maintainer>
