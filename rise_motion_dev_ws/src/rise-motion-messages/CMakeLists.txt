@@ -7,9 +7,13 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/msg_state_current.msg"
+  "msg/msg_state_notice.msg"
+  "srv/srv_enable_ethercat.srv"
+ )
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
