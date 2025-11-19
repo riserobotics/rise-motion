@@ -1,0 +1,2 @@
+int8 current_state
+int8 previous_state
