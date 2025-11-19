@@ -1,0 +1,4 @@
+int8 target
+bool enable
+---
+int8 status_enable
