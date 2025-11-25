@@ -8,3 +8,11 @@
 
 # RISE Motion
 A ROS2 wrapper around the SOEM and IgH EtherCAT driver for precise motion control in robotic exoskeletons. 
+
+## Getting started
+To get started with the development of the motion system, you have to initialize the SOEM submodule and update the code. To do this, run the following commands:
+
+```bash
+git submodule init
+git submodule update
+```
