@@ -1,0 +1,3 @@
+[submodule "rise_motion_dev_ws/src/SOEM"]
+	path = rise_motion_dev_ws/src/SOEM
+	url = https://github.com/riserobotics/SOEM
