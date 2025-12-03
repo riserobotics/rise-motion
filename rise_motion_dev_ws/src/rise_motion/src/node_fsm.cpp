@@ -1,18 +1,26 @@
 #include <map>
 #include <utility>
 
+#include <rclcpp/rclcpp.hpp>
 #include <rise_motion/node_fsm.hpp>
 
 StateMachine::StateMachine() : state(State::Idle) {}
 
-StateMachine::State StateMachine::handle_event(StateMachine::Event e) {
+StateMachine::State StateMachine::handle_event(Event e) {
   std::pair<StateMachine::State, StateMachine::Event> keypair = {this->state,
                                                                  e};
   auto it = StateMachine::transition_table.find(keypair);
   if (it != StateMachine::transition_table.end()) {
+    State old = state;
     this->state = it->second;
+    RCLCPP_INFO(logger,
+                "Transition %s --(%s)--> %s", state_to_string(old).c_str(),
+                event_to_string(e).c_str(), state_to_string(state).c_str());
     return it->second;
   } else {
+    RCLCPP_WARN(logger,
+                "Invalid transition: (State: %s, Event: %s)",
+                state_to_string(state).c_str(), event_to_string(e).c_str());
     return this->state;
   }
 }

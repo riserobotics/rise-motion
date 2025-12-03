@@ -42,9 +42,6 @@ private:
       message.previous_state = static_cast<uint8_t>(previous_state);
       message.current_state = static_cast<uint8_t>(new_state);
       sm_.set_state(new_state);
-
-      RCLCPP_INFO(this->get_logger(), "State changed to '%s'",
-                  StateMachine::state_to_string(sm_.get_state()).c_str());
       this->publisher_->publish(message);
     }
   }
