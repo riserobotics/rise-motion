@@ -5,7 +5,7 @@
 class StateMachine {
 public:
   enum class State { Idle, Initialized, Operational, Error };
-  enum class Event { Idle, Initialized, Operational, Error };
+  enum class Event { ToIdle, ToInitialized, ToOperational, ToError };
 
   StateMachine();
 

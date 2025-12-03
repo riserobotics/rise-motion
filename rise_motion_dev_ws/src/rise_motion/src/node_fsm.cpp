@@ -38,8 +38,9 @@ std::string StateMachine::state_to_string(State s) {
 std::map<std::pair<StateMachine::State, StateMachine::Event>,
          StateMachine::State>
     StateMachine::transition_table = {
-        {{State::Idle, Event::Initialized}, State::Initialized},
-        {{State::Initialized, Event::Operational}, State::Operational},
-        {{State::Initialized, Event::Error}, State::Error},
-        {{State::Operational, Event::Error}, State::Error},
-        {{State::Error, Event::Idle}, State::Idle}};
+        {{State::Idle, Event::ToInitialized}, State::Initialized},
+        {{State::Idle, Event::ToError}, State::Initialized},
+        {{State::Initialized, Event::ToOperational}, State::Operational},
+        {{State::Initialized, Event::ToError}, State::Error},
+        {{State::Operational, Event::ToError}, State::Error},
+        {{State::Error, Event::ToIdle}, State::Idle}};

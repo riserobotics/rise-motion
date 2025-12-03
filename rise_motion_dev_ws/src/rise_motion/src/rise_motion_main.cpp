@@ -24,17 +24,17 @@ private:
 
     switch (previous_state) {
     case StateMachine::State::Idle:
-      new_state = sm_.handle_event(StateMachine::Event::Initialized);
+      new_state = sm_.handle_event(StateMachine::Event::ToInitialized);
       break;
     case StateMachine::State::Initialized:
-      new_state = sm_.handle_event(StateMachine::Event::Operational);
+      new_state = sm_.handle_event(StateMachine::Event::ToOperational);
       break;
     case StateMachine::State::Operational:
-      new_state = sm_.handle_event(StateMachine::Event::Error);
+      new_state = sm_.handle_event(StateMachine::Event::ToError);
       break;
     case StateMachine::State::Error:
     default:
-      new_state = sm_.handle_event(StateMachine::Event::Idle);
+      new_state = sm_.handle_event(StateMachine::Event::ToIdle);
       break;
     }
 
