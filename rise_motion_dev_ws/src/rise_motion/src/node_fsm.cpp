@@ -49,6 +49,8 @@ std::string StateMachine::event_to_string(Event e) {
   return "Unknown";
 }
 
+rclcpp::Logger StateMachine::logger = rclcpp::get_logger("StateMachine");
+
 std::map<std::pair<StateMachine::State, StateMachine::Event>,
          StateMachine::State>
     StateMachine::transition_table = {

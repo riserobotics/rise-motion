@@ -1,7 +1,9 @@
 #pragma once
 #include <map>
+#include <rclcpp/logger.hpp>
 #include <string>
 #include <utility>
+
 class StateMachine {
 public:
   enum class State { Idle, Initialized, Operational, Error };
@@ -18,4 +20,5 @@ public:
 private:
   State state;
   static std::map<std::pair<State, Event>, State> transition_table;
+  static rclcpp::Logger logger;
 };
