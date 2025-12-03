@@ -35,6 +35,20 @@ std::string StateMachine::state_to_string(State s) {
   return "Unknown";
 }
 
+std::string StateMachine::event_to_string(Event e) {
+  switch (e) {
+  case Event::ToIdle:
+    return "ToIdle";
+  case Event::ToInitialized:
+    return "ToInitialized";
+  case Event::ToOperational:
+    return "ToOperational";
+  case Event::ToError:
+    return "ToError";
+  }
+  return "Unknown";
+}
+
 std::map<std::pair<StateMachine::State, StateMachine::Event>,
          StateMachine::State>
     StateMachine::transition_table = {

@@ -13,6 +13,7 @@ public:
   void set_state(State s);
   State get_state();
   static std::string state_to_string(State s);
+  static std::string event_to_string(Event e);
 
 private:
   State state;
