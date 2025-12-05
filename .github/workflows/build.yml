@@ -1,0 +1,22 @@
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+
+    container:
+      image: ghcr.io/riserobotics/rise-docker-ros2-container:main
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: build workspace
+        working-directory: rise_motion_dev_ws
+        run: |
+          . /opt/ros/jazzy/setup.sh
+          colcon build --event-handlers console_cohesion+ --symlink-install
