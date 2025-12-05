@@ -1,55 +1,163 @@
-#include <chrono>
-#include <memory>
-#include <rclcpp/executors.hpp>
-#include <rclcpp/node.hpp>
+#include <rclcpp/logging.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp/timer.hpp>
+
 #include <rise_motion/node_fsm.hpp>
+#include <rise_motion_messages/msg/motor_cmd_msg.hpp>
 #include <rise_motion_messages/msg/state_current_msg.hpp>
-#include <string>
+#include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
+#include <rise_motion_messages/srv/get_ethercat_parameters_srv.hpp>
+#include <rise_motion_messages/srv/set_ethercat_parameters_srv.hpp>
 
 class RiseMotionMain : public rclcpp::Node {
 public:
-  RiseMotionMain() : Node("rise_motion_main"), sm_() {
-    publisher_ =
-        this->create_publisher<rise_motion_messages::msg::StateCurrentMsg>(
-            "rise_motion_state_changes", 10);
-    timer_ = this->create_wall_timer(std::chrono::milliseconds(500),
-                                     [this]() -> void { this->on_time_out(); });
+  RiseMotionMain() : Node("rise_motion_main") {
+    setup_timers();
+    setup_publishers();
+    setup_services();
+    setup_subscribers();
   }
 
 private:
-  void on_time_out() {
-    auto message = rise_motion_messages::msg::StateCurrentMsg();
-    StateMachine::State previous_state = sm_.get_state();
-    StateMachine::State new_state;
+  void setup_timers() {
+    output_motor_cmd_timer =
+        this->create_wall_timer(std::chrono::milliseconds(1), [this]() {
+          output_motor_cmd_timer_callback();
+        });
+  }
+  void setup_publishers() {
+    output_motor_cmd_publisher =
+        this->create_publisher<rise_motion_messages::msg::MotorCmdMsg>(
+            "output_motor_cmd", 10);
+    rise_motion_state_changes_publisher =
+        this->create_publisher<rise_motion_messages::msg::StateCurrentMsg>(
+            "rise_motion_state_changes", 10);
+  }
+  void setup_services() {
+    enable_ethercat_srv =
+        this->create_service<rise_motion_messages::srv::EnableEthercatSrv>(
+            "enable_ethercat",
+            [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                   const std::shared_ptr<
+                       rise_motion_messages::srv::EnableEthercatSrv::Request>
+                       request,
+                   const std::shared_ptr<
+                       rise_motion_messages::srv::EnableEthercatSrv::Response>
+                       response) {
+              this->handle_enable_ethercat(request_header, request, response);
+            });
 
-    switch (previous_state) {
-    case StateMachine::State::Idle:
-      new_state = sm_.handle_event(StateMachine::Event::ToInitialized);
-      break;
-    case StateMachine::State::Initialized:
-      new_state = sm_.handle_event(StateMachine::Event::ToOperational);
-      break;
-    case StateMachine::State::Operational:
-      new_state = sm_.handle_event(StateMachine::Event::ToError);
-      break;
-    case StateMachine::State::Error:
-    default:
-      new_state = sm_.handle_event(StateMachine::Event::ToIdle);
-      break;
-    }
+    get_ethercat_parameters_srv = this->create_service<
+        rise_motion_messages::srv::GetEthercatParametersSrv>(
+        "get_ethercat_parameters",
+        [this](
+            const std::shared_ptr<rmw_request_id_t> request_header,
+            const std::shared_ptr<
+                rise_motion_messages::srv::GetEthercatParametersSrv::Request>
+                request,
+            const std::shared_ptr<
+                rise_motion_messages::srv::GetEthercatParametersSrv::Response>
+                response) {
+          this->handle_get_ethercat_parameters(request_header, request,
+                                               response);
+        });
 
-    if (sm_.get_state() != previous_state) {
-      message.previous_state = static_cast<uint8_t>(previous_state);
-      message.current_state = static_cast<uint8_t>(new_state);
-      sm_.set_state(new_state);
-      this->publisher_->publish(message);
-    }
+    set_ethercat_parameters_srv = this->create_service<
+        rise_motion_messages::srv::SetEthercatParametersSrv>(
+        "set_ethercat_parameters",
+        [this](
+            const std::shared_ptr<rmw_request_id_t> request_header,
+            const std::shared_ptr<
+                rise_motion_messages::srv::SetEthercatParametersSrv::Request>
+                request,
+            const std::shared_ptr<
+                rise_motion_messages::srv::SetEthercatParametersSrv::Response>
+                response) {
+          this->handle_set_ethercat_parameters(request_header, request,
+                                               response);
+        });
   }
 
-  rclcpp::TimerBase::SharedPtr timer_;
+  void setup_subscribers() {
+    input_motor_cmd_subscriber =
+        this->create_subscription<rise_motion_messages::msg::MotorCmdMsg>(
+            "input_motor_cmd", 10,
+            [this](rise_motion_messages::msg::MotorCmdMsg::SharedPtr msg) {
+              handle_input_motor_cmd(msg);
+            });
+  }
+
+  void output_motor_cmd_timer_callback() {
+    RCLCPP_WARN(get_logger(),
+                "output_motor_cmd_timer_callback not implemented");
+  }
+
+  void handle_enable_ethercat(
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<
+          rise_motion_messages::srv::EnableEthercatSrv::Request>
+          request,
+      const std::shared_ptr<
+          rise_motion_messages::srv::EnableEthercatSrv::Response>
+          response) {
+    (void)request_header;
+    (void)request;
+    (void)response;
+    RCLCPP_WARN(get_logger(), "handle_enable_ethercat not implemented");
+  }
+
+  void handle_set_ethercat_parameters(
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<
+          rise_motion_messages::srv::SetEthercatParametersSrv::Request>
+          request,
+      const std::shared_ptr<
+          rise_motion_messages::srv::SetEthercatParametersSrv::Response>
+          response) {
+    (void)request_header;
+    (void)request;
+    (void)response;
+    RCLCPP_WARN(get_logger(), "handle_set_ethercat_parameters not implemented");
+  }
+
+  void handle_get_ethercat_parameters(
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<
+          rise_motion_messages::srv::GetEthercatParametersSrv::Request>
+          request,
+      const std::shared_ptr<
+          rise_motion_messages::srv::GetEthercatParametersSrv::Response>
+          response) {
+    (void)request_header;
+    (void)request;
+    (void)response;
+    RCLCPP_WARN(get_logger(), "handle_get_ethercat_parameters not implemented");
+  }
+
+  void handle_input_motor_cmd(
+      const rise_motion_messages::msg::MotorCmdMsg::SharedPtr msg) {
+    (void)msg;
+    RCLCPP_WARN(get_logger(), "handle_input_motor_cmd not implemented");
+  }
+
   rclcpp::Publisher<rise_motion_messages::msg::StateCurrentMsg>::SharedPtr
-      publisher_;
-  StateMachine sm_;
+      rise_motion_state_changes_publisher;
+  rclcpp::Publisher<rise_motion_messages::msg::MotorCmdMsg>::SharedPtr
+      output_motor_cmd_publisher;
+
+  rclcpp::TimerBase::SharedPtr output_motor_cmd_timer;
+
+  rclcpp::Service<rise_motion_messages::srv::EnableEthercatSrv>::SharedPtr
+      enable_ethercat_srv;
+  rclcpp::Service<rise_motion_messages::srv::SetEthercatParametersSrv>::
+      SharedPtr set_ethercat_parameters_srv;
+  rclcpp::Service<rise_motion_messages::srv::GetEthercatParametersSrv>::
+      SharedPtr get_ethercat_parameters_srv;
+
+  rclcpp::Subscription<rise_motion_messages::msg::MotorCmdMsg>::SharedPtr
+      input_motor_cmd_subscriber;
+
+  NodeFSM state_machine;
 };
 
 int main(int argc, char *argv[]) {
