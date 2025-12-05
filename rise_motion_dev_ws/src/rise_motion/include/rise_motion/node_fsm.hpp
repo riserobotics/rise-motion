@@ -4,12 +4,12 @@
 #include <string>
 #include <utility>
 
-class StateMachine {
+class NodeFSM {
 public:
   enum class State { Idle, Initialized, Operational, Error };
   enum class Event { ToIdle, ToInitialized, ToOperational, ToError };
 
-  StateMachine();
+  NodeFSM();
 
   State handle_event(Event e);
   void set_state(State s);

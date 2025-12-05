@@ -4,32 +4,30 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion/node_fsm.hpp>
 
-StateMachine::StateMachine() : state(State::Idle) {}
+NodeFSM::NodeFSM() : state(State::Idle) {}
 
-StateMachine::State StateMachine::handle_event(Event e) {
-  std::pair<StateMachine::State, StateMachine::Event> keypair = {this->state,
-                                                                 e};
-  auto it = StateMachine::transition_table.find(keypair);
-  if (it != StateMachine::transition_table.end()) {
+NodeFSM::State NodeFSM::handle_event(Event e) {
+  std::pair<NodeFSM::State, NodeFSM::Event> keypair = {this->state, e};
+  auto it = NodeFSM::transition_table.find(keypair);
+  if (it != NodeFSM::transition_table.end()) {
     State old = state;
     this->state = it->second;
-    RCLCPP_INFO(logger,
-                "Transition %s --(%s)--> %s", state_to_string(old).c_str(),
-                event_to_string(e).c_str(), state_to_string(state).c_str());
+    RCLCPP_INFO(logger, "Transition %s --(%s)--> %s",
+                state_to_string(old).c_str(), event_to_string(e).c_str(),
+                state_to_string(state).c_str());
     return it->second;
   } else {
-    RCLCPP_WARN(logger,
-                "Invalid transition: (State: %s, Event: %s)",
+    RCLCPP_WARN(logger, "Invalid transition: (State: %s, Event: %s)",
                 state_to_string(state).c_str(), event_to_string(e).c_str());
     return this->state;
   }
 }
 
-void StateMachine::set_state(State s) { state = s; }
+void NodeFSM::set_state(State s) { state = s; }
 
-StateMachine::State StateMachine::get_state() { return state; }
+NodeFSM::State NodeFSM::get_state() { return state; }
 
-std::string StateMachine::state_to_string(State s) {
+std::string NodeFSM::state_to_string(State s) {
   switch (s) {
   case State::Idle:
     return "Idle";
@@ -43,7 +41,7 @@ std::string StateMachine::state_to_string(State s) {
   return "Unknown";
 }
 
-std::string StateMachine::event_to_string(Event e) {
+std::string NodeFSM::event_to_string(Event e) {
   switch (e) {
   case Event::ToIdle:
     return "ToIdle";
@@ -57,11 +55,10 @@ std::string StateMachine::event_to_string(Event e) {
   return "Unknown";
 }
 
-rclcpp::Logger StateMachine::logger = rclcpp::get_logger("StateMachine");
+rclcpp::Logger NodeFSM::logger = rclcpp::get_logger("NodeFSM");
 
-std::map<std::pair<StateMachine::State, StateMachine::Event>,
-         StateMachine::State>
-    StateMachine::transition_table = {
+std::map<std::pair<NodeFSM::State, NodeFSM::Event>, NodeFSM::State>
+    NodeFSM::transition_table = {
         {{State::Idle, Event::ToInitialized}, State::Initialized},
         {{State::Idle, Event::ToError}, State::Initialized},
         {{State::Initialized, Event::ToOperational}, State::Operational},
