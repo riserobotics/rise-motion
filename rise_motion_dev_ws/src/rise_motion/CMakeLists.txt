@@ -7,9 +7,27 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rise_motion_messages REQUIRED)
+
+include_directories(include)
+
+add_subdirectory(SOEM)
+
+add_executable(
+	rise_motion_main
+	src/rise_motion_main.cpp
+)
+target_link_libraries(
+	rise_motion_main
+	PUBLIC rclcpp::rclcpp
+	soem
+	${rise_motion_messages_TARGETS}
+)
+install(TARGETS
+  rise_motion_main
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
