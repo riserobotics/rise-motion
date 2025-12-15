@@ -1,0 +1,115 @@
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <mutex>
+#include <rclcpp/logging.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rise_motion/ec_manager.hpp>
+#include <rise_motion/ec_structs.hpp>
+#include <soem/soem.h>
+#include <string>
+#include <thread>
+#include <vector>
+
+// expected config, needs to be retrieved from config node
+struct {
+  int slavecount = 1;
+  ec_slavet slavelist[1] = {{.name = "a name"}};
+} config;
+
+ECManager::ECManager(const std::string interface) : interface(interface) {}
+
+void ECManager::init_ec() {
+  int ret;
+  ret = ecx_init(&ctx, interface.c_str());
+  if (ret <= 0) {
+    RCLCPP_WARN(logger, "Couldn't initialize SOEM context");
+    std::exit(EXIT_FAILURE);
+  }
+
+  RCLCPP_INFO(logger, "Discovering EC Nodes");
+  ret = ecx_config_init(&ctx);
+  if (ret <= 0) {
+    RCLCPP_WARN(logger, "EC Nodes Discovery failed");
+    std::exit(EXIT_FAILURE);
+  }
+
+  if (ctx.slavecount != config.slavecount) {
+    RCLCPP_WARN(logger, "Expected %d devices, but discovered %d",
+                config.slavecount, ctx.slavecount);
+    std::exit(EXIT_FAILURE);
+  }
+
+  RCLCPP_INFO(logger, "Mapping IO");
+  ret = ecx_config_map_group(&ctx, IOMap, 0);
+  if (ret > IOMAP_SIZE) {
+    RCLCPP_WARN(logger, "Couldn't map IO: Buffer to small");
+    std::exit(EXIT_FAILURE);
+  }
+
+  expectedWKC = ctx.grouplist[0].outputsWKC * 2 + ctx.grouplist[0].inputsWKC;
+  RCLCPP_INFO(logger, "Configuring ditributed clock");
+  ecx_configdc(&ctx);
+
+  ecx_statecheck(&ctx, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
+
+  // Check if nodes have valid outputs
+  ecx_send_processdata(&ctx);
+  ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+  // TODO: Check if nodes have valid outputs
+  for (int i = 1; i <= ctx.slavecount; i++) {
+    if (strcmp(config.slavelist[i].name, ctx.slavelist[i].name)) {
+      RCLCPP_WARN(logger, "Node %d: Name does not match", i);
+    }
+  }
+  // Now all nodes should be in safe op
+}
+void ECManager::transition_to_operational() {
+  std::unique_lock<std::mutex> lk(ctx_mutex);
+  RCLCPP_INFO(logger, "Entering operational mode");
+  ctx.slavelist[0].state = EC_STATE_OPERATIONAL;
+  ecx_writestate(&ctx, 0);
+
+  // check if nodes entered operational mode
+  int chk = 200;
+  do {
+    ecx_send_processdata(&ctx);
+    ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+    ecx_statecheck(&ctx, 0, EC_STATE_OPERATIONAL, 50000);
+  } while (chk-- && (ctx.slavelist[0].state != EC_STATE_OPERATIONAL));
+  if (ctx.slavelist[0].state != EC_STATE_OPERATIONAL) {
+    RCLCPP_WARN(logger, "Couldn't transition to operational");
+    std::exit(EXIT_FAILURE);
+  }
+}
+void ECManager::cyclic_loop() {
+  transition_to_operational();
+  int wkc;
+  auto next = std::chrono::steady_clock::now();
+  auto period = std::chrono::milliseconds(1);
+  for (;;) {
+    next += period;
+    std::unique_lock<std::mutex> lk(ctx_mutex);
+    ecx_send_processdata(&ctx);
+    wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+    if (wkc != expectedWKC) {
+      RCLCPP_WARN(logger, "Not all nodes responded");
+    }
+    std::this_thread::sleep_until(next);
+  }
+}
+void ECManager::get_motor_values(std::vector<uint32_t> &motor_values) {
+  std::unique_lock<std::mutex> lk(ctx_mutex);
+  for (int i = 0; i < config.slavecount; i++) {
+    outputs *motor_outputs = (outputs *)ctx.slavelist[i + 1].outputs;
+    motor_values[i] = motor_outputs->PositionValue;
+  }
+}
+void ECManager::set_motor_values(std::vector<uint32_t> &motor_values) {
+  std::unique_lock<std::mutex> lk(ctx_mutex);
+  for (int i = 0; i < config.slavecount; i++) {
+    inputs *motor_inputs = (inputs *)ctx.slavelist[i + 1].inputs;
+    motor_inputs->TargetPosition = motor_values[i];
+  }
+}
+rclcpp::Logger ECManager::logger = rclcpp::get_logger("ECManager");
