@@ -1,26 +1,34 @@
 #include <chrono>
-#include <cstdint>
 #include <rise_motion/ec_manager.hpp>
+#include <rise_motion/ec_structs.hpp>
+#include <rise_motion/snapshot.hpp>
 #include <thread>
-#include <vector>
 
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
-  std::vector<uint32_t> desired_motor_values;
-  std::vector<uint32_t> actual_motor_values;
-  desired_motor_values.resize(6);
-  actual_motor_values.resize(6);
 
-  ECManager ec_manager("eno1");
+  Snapshot<MotorInputs> inputs;
+  Snapshot<MotorOutputs> outputs;
+  ECManager ec_manager("eno1", inputs, outputs);
   ec_manager.init_ec();
-
   std::thread ec_manager_thread(&ECManager::cyclic_loop, &ec_manager);
 
-  for (int pos = 0; pos <= 10000; pos++) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    ec_manager.set_motor_values(desired_motor_values);
-    ec_manager.get_motor_values(actual_motor_values);
+  MotorInputs local_inputs;
+  MotorOutputs local_outputs;
+  auto next = std::chrono::steady_clock::now();
+  auto period = std::chrono::milliseconds(1);
+  long long counter = 0;
+  for (;;) {
+    next += period;
+    counter++;
+    inputs.write(local_inputs);
+    outputs.read(local_outputs);
+    if (counter % 1000 == 0) {
+      print_motor_inputs(&local_inputs);
+      print_motor_outputs(&local_outputs);
+    }
+    std::this_thread::sleep_until(next);
   }
   ec_manager_thread.join();
   return 0;

@@ -1,11 +1,10 @@
 #include <chrono>
 #include <cstdint>
-#include <iostream>
-#include <mutex>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion/ec_manager.hpp>
 #include <rise_motion/ec_structs.hpp>
+#include <rise_motion/snapshot.hpp>
 #include <soem/soem.h>
 #include <string>
 #include <thread>
@@ -17,7 +16,9 @@ struct {
   ec_slavet slavelist[1] = {{.name = "a name"}};
 } config;
 
-ECManager::ECManager(const std::string interface) : interface(interface) {}
+ECManager::ECManager(const std::string interface, Snapshot<MotorInputs> &inputs,
+                     Snapshot<MotorOutputs> &outputs)
+    : interface(interface), inputs(inputs), outputs(outputs) {}
 
 void ECManager::init_ec() {
   int ret;
@@ -65,7 +66,6 @@ void ECManager::init_ec() {
   // Now all nodes should be in safe op
 }
 void ECManager::transition_to_operational() {
-  std::unique_lock<std::mutex> lk(ctx_mutex);
   RCLCPP_INFO(logger, "Entering operational mode");
   ctx.slavelist[0].state = EC_STATE_OPERATIONAL;
   ecx_writestate(&ctx, 0);
@@ -89,27 +89,29 @@ void ECManager::cyclic_loop() {
   auto period = std::chrono::milliseconds(1);
   for (;;) {
     next += period;
-    std::unique_lock<std::mutex> lk(ctx_mutex);
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+
+    publish_outputs(); // share with ros node
+    consume_inputs();  // get from ros node
+
     if (wkc != expectedWKC) {
       RCLCPP_WARN(logger, "Not all nodes responded");
     }
     std::this_thread::sleep_until(next);
   }
 }
-void ECManager::get_motor_values(std::vector<uint32_t> &motor_values) {
-  std::unique_lock<std::mutex> lk(ctx_mutex);
-  for (int i = 0; i < config.slavecount; i++) {
-    outputs *motor_outputs = (outputs *)ctx.slavelist[i + 1].outputs;
-    motor_values[i] = motor_outputs->PositionValue;
-  }
+
+void ECManager::publish_outputs() {
+  MotorOutputs new_outputs;
+  memcpy(&new_outputs, ctx.slavelist[1].outputs, sizeof(MotorOutputs));
+  outputs.write(new_outputs);
 }
-void ECManager::set_motor_values(std::vector<uint32_t> &motor_values) {
-  std::unique_lock<std::mutex> lk(ctx_mutex);
-  for (int i = 0; i < config.slavecount; i++) {
-    inputs *motor_inputs = (inputs *)ctx.slavelist[i + 1].inputs;
-    motor_inputs->TargetPosition = motor_values[i];
-  }
+
+void ECManager::consume_inputs() {
+  MotorInputs new_inputs;
+  inputs.read(new_inputs);
+  memcpy(ctx.slavelist[1].inputs, &new_inputs, sizeof(MotorInputs));
 }
+
 rclcpp::Logger ECManager::logger = rclcpp::get_logger("ECManager");

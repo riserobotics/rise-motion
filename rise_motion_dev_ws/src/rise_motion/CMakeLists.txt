@@ -17,6 +17,7 @@ add_executable(
 	rise_motion_main
 	src/main.cpp
 	src/ec_manager.cpp
+        src/ec_structs.cpp
 )
 target_link_libraries(
 	rise_motion_main

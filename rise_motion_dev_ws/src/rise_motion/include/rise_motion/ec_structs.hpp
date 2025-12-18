@@ -1,3 +1,4 @@
+#pragma once
 #include <soem/soem.h>
 
 OSAL_PACKED_BEGIN
@@ -18,7 +19,7 @@ typedef struct OSAL_PACKED {
   int32_t PositionDemandInternalValue;
   int32_t VelocityDemandValue;
   int16_t TorqueDemand;
-} outputs;
+} MotorOutputs;
 OSAL_PACKED_END
 OSAL_PACKED_BEGIN
 typedef struct OSAL_PACKED {
@@ -33,5 +34,9 @@ typedef struct OSAL_PACKED {
   int32_t BitMask;
   int32_t UserMOSI;
   int32_t VelocityOffset;
-} inputs;
+} MotorInputs;
 OSAL_PACKED_END
+
+void print_motor_outputs(const MotorOutputs *o);
+void print_motor_inputs(const MotorInputs *i);
+
