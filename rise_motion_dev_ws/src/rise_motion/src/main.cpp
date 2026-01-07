@@ -1,27 +1,16 @@
-#include <chrono>
-#include <cstdint>
+#include <memory>
+#include <rclcpp/rclcpp.hpp>
 #include <rise_motion/ec_manager.hpp>
-#include <thread>
-#include <vector>
+#include <rise_motion/ethercat_node.hpp>
 
 int main(int argc, char *argv[]) {
-  (void)argc;
-  (void)argv;
-  std::vector<uint32_t> desired_motor_values;
-  std::vector<uint32_t> actual_motor_values;
-  desired_motor_values.resize(6);
-  actual_motor_values.resize(6);
+  rclcpp::init(argc, argv);
 
-  ECManager ec_manager("eno1");
-  ec_manager.init_ec();
+  ECManager ec_manager("eno1"); // TODO: Connect config from rise-os-core
+  auto node = std::make_shared<EthercatNode>(ec_manager);
 
-  std::thread ec_manager_thread(&ECManager::cyclic_loop, &ec_manager);
+  rclcpp::spin(node);
 
-  for (int pos = 0; pos <= 10000; pos++) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    ec_manager.set_motor_values(desired_motor_values);
-    ec_manager.get_motor_values(actual_motor_values);
-  }
-  ec_manager_thread.join();
+  rclcpp::shutdown();
   return 0;
 }

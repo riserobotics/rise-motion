@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rise_motion_messages REQUIRED)
 
 include_directories(include)
 
@@ -17,10 +18,15 @@ add_executable(
 	rise_motion_main
 	src/main.cpp
 	src/ec_manager.cpp
+	src/ethercat_node.cpp
+)
+ament_target_dependencies(
+	rise_motion_main
+	rclcpp
+	rise_motion_messages
 )
 target_link_libraries(
 	rise_motion_main
-	PUBLIC rclcpp::rclcpp
 	soem
 )
 install(TARGETS

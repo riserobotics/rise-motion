@@ -84,10 +84,11 @@ void ECManager::transition_to_operational() {
 }
 void ECManager::cyclic_loop() {
   transition_to_operational();
+  running_ = true;
   int wkc;
   auto next = std::chrono::steady_clock::now();
   auto period = std::chrono::milliseconds(1);
-  for (;;) {
+  while (running_) {
     next += period;
     std::unique_lock<std::mutex> lk(ctx_mutex);
     ecx_send_processdata(&ctx);
@@ -98,14 +99,17 @@ void ECManager::cyclic_loop() {
     std::this_thread::sleep_until(next);
   }
 }
-void ECManager::get_motor_values(std::vector<uint32_t> &motor_values) {
+void ECManager::stop() {
+  running_ = false;
+}
+void ECManager::get_motor_values(std::vector<int32_t> &motor_values) {
   std::unique_lock<std::mutex> lk(ctx_mutex);
   for (int i = 0; i < config.slavecount; i++) {
     outputs *motor_outputs = (outputs *)ctx.slavelist[i + 1].outputs;
     motor_values[i] = motor_outputs->PositionValue;
   }
 }
-void ECManager::set_motor_values(std::vector<uint32_t> &motor_values) {
+void ECManager::set_motor_values(std::vector<int32_t> &motor_values) {
   std::unique_lock<std::mutex> lk(ctx_mutex);
   for (int i = 0; i < config.slavecount; i++) {
     inputs *motor_inputs = (inputs *)ctx.slavelist[i + 1].inputs;
