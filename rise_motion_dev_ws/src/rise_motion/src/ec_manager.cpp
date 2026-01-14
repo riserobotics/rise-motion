@@ -88,20 +88,60 @@ void ECManager::cyclic_loop() {
   int wkc;
   auto next = std::chrono::steady_clock::now();
   auto period = std::chrono::milliseconds(1);
+
+  // Local buffer for motor commands
+  std::vector<int32_t> motor_commands(config.slavecount, 0);
+
+  // Local buffer for motor feedback
+  std::vector<int32_t> motor_feedback(config.slavecount, 0);
+
   while (running_) {
     next += period;
-    std::unique_lock<std::mutex> lk(ctx_mutex);
+    // perf_read() is wait-free - returns immediately if no new data
+    if (cmd_apsa.perf_read(motor_commands)) {
+      // New commands received! Apply them to EtherCAT slaves
+      for (int i = 0; i < config.slavecount; i++) {
+        inputs *motor_inputs = (inputs *)ctx.slavelist[i + 1].inputs;
+        motor_inputs->TargetPosition = motor_commands[i];
+      }
+    }
+    // If no new commands, EtherCAT slaves keep executing previous commands
+
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+
     if (wkc != expectedWKC) {
       RCLCPP_WARN(logger, "Not all nodes responded");
     }
+
+    for (int i = 0; i < config.slavecount; i++) {
+      outputs *motor_outputs = (outputs *)ctx.slavelist[i + 1].outputs;
+      motor_feedback[i] = motor_outputs->PositionValue;
+    }
+
+    // Make feedback available to ROS publisher (wait-free)
+    feedback_apsa.perf_write(motor_feedback);
+
+    // Sleep until next cycle (maintains 1kHz frequency)
     std::this_thread::sleep_until(next);
   }
 }
 void ECManager::stop() {
   running_ = false;
 }
+
+bool ECManager::get_motor_values_apsa(std::vector<int32_t> &motor_values) {
+  // comm_read() returns true if new data is available, false otherwise
+  return feedback_apsa.comm_read(motor_values);
+}
+
+
+bool ECManager::set_motor_values_apsa(const std::vector<int32_t> &motor_values) {
+  // comm_write() queues the data for the EtherCAT loop to pick up
+  return cmd_apsa.comm_write(motor_values);
+}
+
+
 void ECManager::get_motor_values(std::vector<int32_t> &motor_values) {
   std::unique_lock<std::mutex> lk(ctx_mutex);
   for (int i = 0; i < config.slavecount; i++) {
@@ -109,6 +149,8 @@ void ECManager::get_motor_values(std::vector<int32_t> &motor_values) {
     motor_values[i] = motor_outputs->PositionValue;
   }
 }
+
+
 void ECManager::set_motor_values(std::vector<int32_t> &motor_values) {
   std::unique_lock<std::mutex> lk(ctx_mutex);
   for (int i = 0; i < config.slavecount; i++) {
@@ -116,4 +158,5 @@ void ECManager::set_motor_values(std::vector<int32_t> &motor_values) {
     motor_inputs->TargetPosition = motor_values[i];
   }
 }
+
 rclcpp::Logger ECManager::logger = rclcpp::get_logger("ECManager");

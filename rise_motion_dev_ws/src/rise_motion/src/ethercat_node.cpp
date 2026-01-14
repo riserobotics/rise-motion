@@ -23,7 +23,6 @@ EthercatNode::EthercatNode(ECManager& ec_manager)
     "enable_ethercat",
     std::bind(&EthercatNode::enableServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
 
-
   RCLCPP_INFO(get_logger(), "EtherCAT node initialized");
 }
 
@@ -36,20 +35,39 @@ EthercatNode::~EthercatNode() {
   }
 }
 
+/**
+ * @brief ROS subscriber callback for motor commands
+ *
+ * Communication Thread (ROS side) - SEND PATH: ROS → EtherCAT
+ *
+ * Uses APSA's comm_write() for lock-free transfer to the 1kHz EtherCAT loop.
+ * Never blocks the EtherCAT loop.
+ */
 void EthercatNode::commandCallback(
     const rise_motion_messages::msg::MotorPositions::SharedPtr msg) {
   std::vector<int32_t> positions(msg->positions.begin(), msg->positions.end());
-  ec_manager_.set_motor_values(positions);
+
+  if (!ec_manager_.set_motor_values_apsa(positions)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue motor commands");
+  }
 }
 
+/**
+ * @brief ROS publisher timer callback for motor feedback
+ *
+ * Communication Thread (ROS side) - RECEIVE PATH: EtherCAT → ROS
+ *
+ * Uses APSA's comm_read() for lock-free transfer from the 1kHz EtherCAT loop.
+ * Only publishes when NEW feedback is available.
+ */
 void EthercatNode::publishFeedback() {
   std::vector<int32_t> positions;
-  positions.resize(6);
-  ec_manager_.get_motor_values(positions);
 
-  auto msg = rise_motion_messages::msg::MotorPositions();
-  msg.positions.assign(positions.begin(), positions.end());
-  feedback_pub_->publish(msg);
+  if (ec_manager_.get_motor_values_apsa(positions)) {
+    auto msg = rise_motion_messages::msg::MotorPositions();
+    msg.positions.assign(positions.begin(), positions.end());
+    feedback_pub_->publish(msg);
+  }
 }
 
 void EthercatNode::enableServiceCallback(
@@ -73,4 +91,3 @@ void EthercatNode::enableServiceCallback(
 
   response->status_enable = ethercat_enabled_ ? 1 : 0;
 }
-
