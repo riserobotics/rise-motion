@@ -83,6 +83,19 @@ public:
 
   CiA402Motor(CiA402_Inputs *inputs, CiA402_Outputs *outputs);
 
+  /**
+   * @brief Gets the motor's current state based on its status word.
+   *
+   * Compares the status word against predefined patterns. Returns the matching
+   * state, or `std::nullopt` if no match is found.
+   *
+   * @return The motor's state if a match is found; otherwise, `std::nullopt`.
+   *
+   * @warning Returning `std::nullopt` indicates an unrecognized status word.
+   *          Callers must handle this case to avoid undefined behavior.
+   *
+   * @see CiA402Motor::State, state_patterns
+   */
   std::optional<State> get_state() const;
   std::string state_as_string() const;
   bool is_state(State s) const;
