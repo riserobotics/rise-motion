@@ -64,6 +64,7 @@ public:
     FAULT_RESET
   };
 
+  // https://doc.synapticon.com/circulo/sw5.4/objects_html/6xxx/6060.html
   enum class ModeOfOperation : int8_t {
     ImpedanceMode = -6,
     JointTorqueMode = -5,
@@ -101,6 +102,7 @@ private:
   };
 
   static constexpr StatePattern state_patterns[] = {
+      // https://doc.synapticon.com/circulo/system_integration/status_and_controlword.html
       // mask     value      state
       {0b1001111, 0b0000000, State::NOT_READY_TO_SWITCH_ON},
       {0b1001111, 0b1000000, State::SWITCH_ON_DISABLED},
@@ -118,6 +120,7 @@ private:
   };
 
   static constexpr ControlPattern control_patterns[] = {
+      // https://doc.synapticon.com/circulo/system_integration/status_and_controlword.html
       // mask      value       operation
       {0b10000111, 0b00000110, Operation::SHUTDOWN},
       {0b10001111, 0b00000111, Operation::SWITCH_ON},
