@@ -26,6 +26,7 @@ bool CiA402Motor::is_state(State s) const {
 bool CiA402Motor::is_operation_enabled() const {
   return is_state(State::OPERATION_ENABLED);
 }
+
 void CiA402Motor::to_operation_enabled() {
   std::optional<State> s = get_state();
 
@@ -69,6 +70,11 @@ void CiA402Motor::set_control_word(Operation op) {
     }
   }
 }
+
+void CiA402Motor::set_mode_of_operation(CiA402Motor::ModeOfOperation m) {
+  outputs->OpMode = static_cast<int8_t>(m);
+}
+
 std::string CiA402Motor::state_as_string() const {
   std::optional<State> s = get_state();
   if (s == std::nullopt) {

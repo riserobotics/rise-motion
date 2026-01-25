@@ -64,6 +64,22 @@ public:
     FAULT_RESET
   };
 
+  enum class ModeOfOperation : int8_t {
+    ImpedanceMode = -6,
+    JointTorqueMode = -5,
+    SystemIdentificationMode = -4,
+    OpenLoopFieldMode = -3,
+    DiagnosticsMode = -2,
+    CoggingCompensationRecordingMode = -1,
+    ProfilePositionMode = 1,
+    ProfileVelocityMode = 3,
+    TorqueProfileMode = 4,
+    HomingMode = 6,
+    CyclicSyncPositionMode = 8,
+    CyclicSyncVelocityMode = 9,
+    CyclicSyncTorqueMode = 10
+  };
+
   CiA402Motor(CiA402_Inputs *inputs, CiA402_Outputs *outputs);
 
   std::optional<State> get_state() const;
@@ -71,10 +87,12 @@ public:
   bool is_state(State s) const;
   bool is_operation_enabled() const;
   bool is_fault() const;
-  
+
   void to_operation_enabled();
   void reset_fault();
   void set_control_word(Operation op);
+  void set_mode_of_operation(ModeOfOperation m);
+
 private:
   struct StatePattern {
     uint16_t mask;
