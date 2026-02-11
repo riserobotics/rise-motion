@@ -7,10 +7,49 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rise_motion_messages REQUIRED)
 
+include_directories(include)
+
+add_subdirectory(SOEM)
+
+add_executable(
+	rise_motion_main
+	src/main.cpp
+	src/ec_manager.cpp
+	src/ethercat_node.cpp
+  src/cia402.cpp
+)
+ament_target_dependencies(
+	rise_motion_main
+	rclcpp
+	rise_motion_messages
+)
+target_link_libraries(
+	rise_motion_main
+	soem
+)
+
+#target_link_options(rise_motion_main PRIVATE -Wl,-rpath,/hello/home/rise/Projects/rise-motion/rise_motion_dev_ws/install/rise_motion_messages/lib)
+install(TARGETS
+  rise_motion_main
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(testing_node
+  src/testing_node.cpp
+)
+
+target_link_libraries(testing_node PUBLIC
+  ${rise_motion_messages_TARGETS}
+  rclcpp::rclcpp
+)
+
+install(TARGETS
+  testing_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
