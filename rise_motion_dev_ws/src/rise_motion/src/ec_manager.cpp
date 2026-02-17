@@ -146,10 +146,24 @@ void ECManager::cyclic_loop() {
     // Sleep until next cycle (maintains 1kHz frequency)
     std::this_thread::sleep_until(next);
   }
+
+  RCLCPP_INFO(logger, "Exiting cyclic loop");
+
+  // Shut down motors
+  for (int i = 1; i <= ctx.slavecount; i++) {
+    CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
+                    (CiA402_Outputs *)ctx.slavelist[i].outputs};
+    m.to_switch_on_disabled();
+  }
+  ecx_send_processdata(&ctx);
+  wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+
+  if (wkc != expectedWKC) {
+    RCLCPP_WARN(logger, "Not all nodes responded");
+  }
 }
-void ECManager::stop() {
-  running_ = false;
-}
+
+void ECManager::stop() { running_ = false; }
 
 bool ECManager::get_motor_values_apsa(std::vector<int32_t> &motor_values) {
   // comm_read() returns true if new data is available, false otherwise
