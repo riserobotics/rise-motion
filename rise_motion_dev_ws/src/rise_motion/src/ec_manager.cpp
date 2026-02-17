@@ -178,9 +178,45 @@ void ECManager::cyclic_loop() {
       RCLCPP_WARN(logger, "Not all nodes responded");
     }
 
-    for (int i = 0; i < config.slavecount; i++) {
-      outputs *motor_outputs = (outputs *)ctx.slavelist[i + 1].outputs;
-      motor_feedback[i] = motor_outputs->PositionValue;
+    for (int i = 1; i <= ctx.slavecount; i++) {
+      CiA402_Inputs *motor_inputs =
+          (CiA402_Inputs *)ctx.slavelist[i].inputs;
+      motor_feedback[i-1] = motor_inputs->PositionValue;
+      RCLCPP_DEBUG(logger,
+             "Motor Inputs:\n"
+             "\tStatusword: 0x%04X\n"
+             "\tOpModeDisplay: %d\n"
+             "\tPositionValue: %d\n"
+             "\tVelocityValue: %d\n"
+             "\tTorqueValue: %d\n"
+             "\tAnalogInput1: %u\n"
+             "\tAnalogInput2: %u\n"
+             "\tAnalogInput3: %u\n"
+             "\tAnalogInput4: %u\n"
+             "\tTuningStatus: 0x%08X\n"
+             "\tDigitalInputs: 0x%08X\n"
+             "\tUserMISO: 0x%08X\n"
+             "\tTimestamp: %u\n"
+             "\tPositionDemandInternalValue: %d\n"
+             "\tVelocityDemandValue: %d\n"
+             "\tTorqueDemand: %d\n",
+             motor_inputs->Statusword,
+             motor_inputs->OpModeDisplay,
+             motor_inputs->PositionValue,
+             motor_inputs->VelocityValue,
+             motor_inputs->TorqueValue,
+             motor_inputs->AnalogInput1,
+             motor_inputs->AnalogInput2,
+             motor_inputs->AnalogInput3,
+             motor_inputs->AnalogInput4,
+             motor_inputs->TuningStatus,
+             motor_inputs->DigitalInputs,
+             motor_inputs->UserMISO,
+             motor_inputs->Timestamp,
+             motor_inputs->PositionDemandInternalValue,
+             motor_inputs->VelocityDemandValue,
+             motor_inputs->TorqueDemand
+	     );
     }
 
     // Make feedback available to ROS publisher (wait-free)
