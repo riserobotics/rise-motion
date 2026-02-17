@@ -23,8 +23,8 @@ ECManager::ECManager(const std::string interface) : interface(interface) {}
 void ECManager::init_ec() {
   int ret;
   RCLCPP_INFO(logger, "Connecting to %s", interface.c_str());
+  ctx.packedMode = TRUE;
   ret = ecx_init(&ctx, interface.c_str());
-  RCLCPP_INFO(logger, "Connecting to %d", ret);
   if (ret <= 0) {
     RCLCPP_WARN(logger, "Couldn't initialize SOEM context");
     std::exit(EXIT_FAILURE);
