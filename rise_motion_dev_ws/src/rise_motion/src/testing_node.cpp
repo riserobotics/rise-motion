@@ -6,6 +6,7 @@
 #include <rise_motion_messages/msg/motor_positions.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
 
+const int increment = 20;
 class TestNode : public rclcpp::Node {
 public:
   TestNode() : Node("test_node") {
@@ -17,16 +18,16 @@ public:
             [this](rise_motion_messages::msg::MotorPositions msg) {
               auto const &motor_pos = msg.positions;
 
-              print_motor_positions(motor_pos, "Received");
+              // print_motor_positions(motor_pos, "Received");
 
               auto response = rise_motion_messages::msg::MotorPositions();
               response.positions.resize(motor_pos.size());
               for (size_t i = 0; i < motor_pos.size(); i++) {
-                response.positions[i] = motor_pos[i] + 100;
+                response.positions[i] = motor_pos[i] + increment;
               }
 
               output_pub->publish(response);
-              print_motor_positions(response.positions, "Published");
+              // print_motor_positions(response.positions, "Published");
             });
 
     output_pub =
@@ -38,6 +39,7 @@ public:
   }
 
   int request_enable_ethercat() {
+    RCLCPP_INFO(get_logger(), "Incrementing motor position with %d", increment);
     RCLCPP_INFO(get_logger(), "Requesting Enable Ethercat");
     while (!client->wait_for_service(std::chrono::seconds(1))) {
       if (!rclcpp::ok()) {
