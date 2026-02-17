@@ -1,12 +1,10 @@
 #include <chrono>
 #include <cstdint>
-#include <iostream>
-#include <mutex>
+#include <cstdlib>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <rise_motion/ec_manager.hpp>
-#include <rise_motion/ec_structs.hpp>
 #include <rise_motion/cia402.hpp>
+#include <rise_motion/ec_manager.hpp>
 #include <soem/soem.h>
 #include <string>
 #include <thread>
