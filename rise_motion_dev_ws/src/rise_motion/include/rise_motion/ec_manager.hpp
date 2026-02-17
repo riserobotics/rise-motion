@@ -32,7 +32,6 @@ private:
   int expectedWKC;
   ecx_contextt ctx;
   uint8_t IOMap[IOMAP_SIZE];
-  std::mutex ctx_mutex;  // Only used for legacy methods and state transitions
   std::atomic<bool> running_{false};
   const std::string interface;
   static rclcpp::Logger logger;

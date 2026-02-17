@@ -67,9 +67,10 @@ void ECManager::init_ec() {
   }
   // Now all nodes should be in safe op
 }
+
 void ECManager::transition_to_operational() {
-  std::unique_lock<std::mutex> lk(ctx_mutex);
-  RCLCPP_INFO(logger, "Entering operational mode");
+  // Transitions Ethercat State Machine to operational
+  RCLCPP_INFO(logger, "Transitioning to operational mode");
   ctx.slavelist[0].state = EC_STATE_OPERATIONAL;
   ecx_writestate(&ctx, 0);
 
@@ -159,24 +160,6 @@ bool ECManager::get_motor_values_apsa(std::vector<int32_t> &motor_values) {
 bool ECManager::set_motor_values_apsa(const std::vector<int32_t> &motor_values) {
   // comm_write() queues the data for the EtherCAT loop to pick up
   return cmd_apsa.comm_write(motor_values);
-}
-
-
-void ECManager::get_motor_values(std::vector<int32_t> &motor_values) {
-  std::unique_lock<std::mutex> lk(ctx_mutex);
-  for (int i = 0; i < config.slavecount; i++) {
-    outputs *motor_outputs = (outputs *)ctx.slavelist[i + 1].outputs;
-    motor_values[i] = motor_outputs->PositionValue;
-  }
-}
-
-
-void ECManager::set_motor_values(std::vector<int32_t> &motor_values) {
-  std::unique_lock<std::mutex> lk(ctx_mutex);
-  for (int i = 0; i < config.slavecount; i++) {
-    inputs *motor_inputs = (inputs *)ctx.slavelist[i + 1].inputs;
-    motor_inputs->TargetPosition = motor_values[i];
-  }
 }
 
 rclcpp::Logger ECManager::logger = rclcpp::get_logger("ECManager");
