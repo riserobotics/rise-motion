@@ -104,21 +104,33 @@ void ECManager::cyclic_loop() {
             CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
   }
 
+  // Transitioning CiA402 State Machine to OPERATION_ENABLED
   int flag = 1;
-  std::cout << "Going to operation_enabled\n";
+  RCLCPP_INFO(logger, "Going to operation_enabled");
   while (flag) {
-  flag = 0;
-    for (int i = 1; i < config.slavecount; i++) {
-        CiA402Motor m{(CiA402_Inputs*)ctx.slavelist[i].inputs, (CiA402_Outputs*)ctx.slavelist[i].outputs};
-        if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
-          m.to_operation_enabled();
-          flag = 1;
-        } else {
-          m.set_mode_of_operation(CiA402Motor::ModeOfOperation::ProfilePositionMode);
-        }
+    flag = 0;
+    for (int i = 1; i <= ctx.slavecount; i++) {
+      CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
+                    (CiA402_Outputs *)ctx.slavelist[i].outputs};
+
+      RCLCPP_DEBUG(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
+      if (!m.get_state().has_value()) {
+	flag = 1;
+	RCLCPP_INFO(logger, "Motor %d has no state", i);
+      } else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
+        m.to_operation_enabled();
+        flag = 1;
+      } else if (m.get_state().value() == CiA402Motor::State::FAULT) {
+	RCLCPP_INFO(logger, "Motor %d in fault. Fault handling not implemented. Exiting...", i);
+	std::exit(EXIT_FAILURE);
       }
+    }
+    ecx_send_processdata(&ctx);
+    ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
   }
-    std::cout << "All motor in operation_enabled\n";
+
+  RCLCPP_INFO(logger, "All motors in operation_enabled");
+  RCLCPP_INFO(logger, "Entering Cyclic Loop");
 
   while (running_) {
     next += period;
