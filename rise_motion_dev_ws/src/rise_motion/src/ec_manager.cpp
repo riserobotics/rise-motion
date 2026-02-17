@@ -136,15 +136,40 @@ void ECManager::cyclic_loop() {
     next += period;
     // perf_read() is wait-free - returns immediately if no new data
     if (cmd_apsa.perf_read(motor_commands)) {
-      // New commands received! Apply them to EtherCAT slaves
-      RCLCPP_INFO(logger, "New Motor Positions");
-      for (int i = 0; i < config.slavecount; i++) {
-        RCLCPP_INFO(logger, "Writing %d to Motor %d", motor_commands[i], i+1);
-        inputs *motor_inputs = (inputs *)ctx.slavelist[i + 1].inputs;
-        motor_inputs->TargetPosition = motor_commands[i];
+      // New commands received! Apply them to EtherCAT nodes
+      for (int i = 1; i <= config.slavecount; i++) {
+        CiA402_Outputs *motor_outputs =
+          (CiA402_Outputs *)ctx.slavelist[i].outputs;
+	CiA402_Inputs *motor_inputs =
+          (CiA402_Inputs *)ctx.slavelist[i].inputs;
+
+	// guard statement
+	if (abs(motor_commands[i-1] - motor_inputs->PositionValue) > 100) {continue;}
+	//write value
+	motor_outputs->TargetPosition = motor_commands[i-1];
+	//RCLCPP_INFO(logger, "TargetPosition: %d, PositionValue: %d", motor_outputs->TargetPosition, motor_inputs->PositionValue);
+        RCLCPP_DEBUG(logger,
+                    "Motor Outputs:\n"
+                    "\tControlword: 0x%04X\n"
+                    "\tOpMode: %d\n"
+                    "\tTargetTorque: %d\n"
+                    "\tTargetPosition: %d\n"
+                    "\tTargetVelocity: %d\n"
+                    "\tTorqueOffset: %d\n"
+                    "\tTuningCommand: %d\n"
+                    "\tPhysicalOutputs: %d\n"
+                    "\tBitMask: 0x%08X\n"
+                    "\tUserMOSI: 0x%08X\n"
+                    "\tVelocityOffset: %d\n",
+                    motor_outputs->Controlword, motor_outputs->OpMode,
+                    motor_outputs->TargetTorque, motor_outputs->TargetPosition,
+                    motor_outputs->TargetVelocity, motor_outputs->TorqueOffset,
+                    motor_outputs->TuningCommand, motor_outputs->PhysicalOutputs,
+                    motor_outputs->BitMask, motor_outputs->UserMOSI,
+                    motor_outputs->VelocityOffset);
       }
     }
-    // If no new commands, EtherCAT slaves keep executing previous commands
+    // If no new commands, EtherCAT nodes keep executing previous commands
 
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
