@@ -13,7 +13,7 @@
 // expected config, needs to be retrieved from config node
 struct {
   int slavecount = 1;
-  ec_slavet slavelist[1] = {{.name = "a name"}};
+  ec_slavet slavelist[1] = {{.name = "WRONG_NAME"}};
 } config;
 
 ECManager::ECManager(const std::string interface) : interface(interface) {}
@@ -59,8 +59,9 @@ void ECManager::init_ec() {
   ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
   // TODO: Check if nodes have valid outputs
   for (int i = 1; i <= ctx.slavecount; i++) {
-    if (strcmp(config.slavelist[i].name, ctx.slavelist[i].name)) {
-      RCLCPP_WARN(logger, "Node %d: Name does not match: %s != %s", i, config.slavelist[i].name, ctx.slavelist[i].name);
+    if (strcmp(config.slavelist[i-1].name, ctx.slavelist[i].name)) {
+      RCLCPP_WARN(logger, "Node %d: Name does not match: %s != %s", i,
+                  config.slavelist[i-1].name, ctx.slavelist[i].name);
     }
   }
   // Now all nodes should be in safe op
