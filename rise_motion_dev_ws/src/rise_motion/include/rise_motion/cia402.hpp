@@ -103,6 +103,7 @@ public:
   bool is_fault() const;
 
   void to_operation_enabled();
+  void to_switch_on_disabled();
   void reset_fault();
   void set_control_word(Operation op);
   void set_mode_of_operation(ModeOfOperation m);

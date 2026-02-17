@@ -58,6 +58,32 @@ void CiA402Motor::to_operation_enabled() {
   }
 }
 
+void CiA402Motor::to_switch_on_disabled() {
+  std::optional<State> s = get_state();
+
+  if (!s.has_value()) {
+    return;
+  }
+
+  std::optional<Operation> next_op = std::nullopt;
+  switch (s.value()) {
+  case State::OPERATION_ENABLED:
+  case State::QUICK_STOP_ACTIVE:
+    next_op = Operation::SHUTDOWN;
+  case State::FAULT_REACTION_ACTIVE:
+  case State::FAULT:
+  case State::SWITCH_ON_DISABLED:
+  case State::READY_TO_SWITCH_ON:
+  case State::SWITCHED_ON:
+  default:
+    return;
+  }
+
+  if (next_op.has_value()) {
+    set_control_word(next_op.value());
+  }
+}
+
 bool CiA402Motor::is_fault() const { return is_state(State::FAULT); }
 
 void CiA402Motor::reset_fault() { set_control_word(Operation::FAULT_RESET); }
