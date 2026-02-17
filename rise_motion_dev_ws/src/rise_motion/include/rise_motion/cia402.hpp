@@ -33,10 +33,10 @@ typedef struct OSAL_PACKED {
   int32_t TargetPosition;
   int32_t TargetVelocity;
   int16_t TorqueOffset;
-  int32_t TuningCommand;
-  int32_t PhysicalOutputs;
-  int32_t BitMask;
-  int32_t UserMOSI;
+  uint32_t TuningCommand;
+  uint32_t PhysicalOutputs;
+  uint32_t BitMask;
+  uint32_t UserMOSI;
   int32_t VelocityOffset;
 } CiA402_Outputs;
 OSAL_PACKED_END
