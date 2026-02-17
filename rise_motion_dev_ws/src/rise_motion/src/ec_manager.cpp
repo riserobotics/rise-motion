@@ -93,11 +93,17 @@ void ECManager::cyclic_loop() {
   auto next = std::chrono::steady_clock::now();
   auto period = std::chrono::milliseconds(1);
 
-  // Local buffer for motor commands
-  std::vector<int32_t> motor_commands(config.slavecount, 0);
+  std::vector<int32_t> motor_commands(ctx.slavecount, 0);
+  std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
 
-  // Local buffer for motor feedback
-  std::vector<int32_t> motor_feedback(config.slavecount, 0);
+  // Setting ModeOfOperation to CyclicSyncPositionMode
+  for (int i = 1; i <= ctx.slavecount; i++) {
+      CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
+                    (CiA402_Outputs *)ctx.slavelist[i].outputs};
+      m.set_mode_of_operation(
+            CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+  }
+
   int flag = 1;
   std::cout << "Going to operation_enabled\n";
   while (flag) {
