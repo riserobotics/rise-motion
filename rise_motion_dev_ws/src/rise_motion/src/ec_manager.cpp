@@ -42,9 +42,11 @@ void ECManager::init_ec() {
 
   if (ctx.slavecount != config.slavecount) {
     RCLCPP_WARN(logger, "Expected %d devices, but discovered %d",
-                config.slavecount, ctx.slavecount);
+		config.slavecount, ctx.slavecount);
     std::exit(EXIT_FAILURE);
   }
+
+  transition_ec(EC_STATE_PRE_OP);
 
   RCLCPP_INFO(logger, "Mapping IO");
   ret = ecx_config_map_group(&ctx, IOMap, 0);
@@ -52,24 +54,14 @@ void ECManager::init_ec() {
     RCLCPP_WARN(logger, "Couldn't map IO: Buffer to small");
     std::exit(EXIT_FAILURE);
   }
+  RCLCPP_INFO(logger, "Using %d of %lu bytes in IOMap", ret, sizeof(IOMap));
 
   expectedWKC = ctx.grouplist[0].outputsWKC * 2 + ctx.grouplist[0].inputsWKC;
-  RCLCPP_INFO(logger, "Configuring ditributed clock");
+
+  RCLCPP_INFO(logger, "Configuring distributed clock");
   ecx_configdc(&ctx);
 
-  ecx_statecheck(&ctx, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4);
-
-  // Check if nodes have valid outputs
-  ecx_send_processdata(&ctx);
-  ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
-  // TODO: Check if nodes have valid outputs
-  for (int i = 1; i <= ctx.slavecount; i++) {
-    if (strcmp(config.slavelist[i-1].name, ctx.slavelist[i].name)) {
-      RCLCPP_WARN(logger, "Node %d: Name does not match: %s != %s", i,
-                  config.slavelist[i-1].name, ctx.slavelist[i].name);
-    }
-  }
-  // Now all nodes should be in safe op
+  transition_ec(EC_STATE_SAFE_OP);
 }
 
 void ECManager::transition_to_operational() {
