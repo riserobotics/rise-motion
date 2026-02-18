@@ -66,7 +66,7 @@ void ECManager::init_ec() {
 
 void ECManager::transition_to_operational() {
   // Transitions Ethercat State Machine to operational
-  RCLCPP_INFO(logger, "Transitioning to operational mode");
+  RCLCPP_INFO(logger, "To OPERATIONAL");
   ctx.slavelist[0].state = EC_STATE_OPERATIONAL;
   ecx_writestate(&ctx, 0);
 
@@ -81,9 +81,12 @@ void ECManager::transition_to_operational() {
     RCLCPP_WARN(logger, "Couldn't transition to operational");
     std::exit(EXIT_FAILURE);
   }
+  RCLCPP_INFO(logger, "Exiting transition_to_operational");
 }
+
 void ECManager::cyclic_loop() {
-  transition_to_operational();
+  //  transition_to_operational();
+  transition_ec(EC_STATE_OPERATIONAL);
   running_ = true;
   int wkc;
   auto next = std::chrono::steady_clock::now();
@@ -95,30 +98,32 @@ void ECManager::cyclic_loop() {
   // Setting ModeOfOperation to CyclicSyncPositionMode
   for (int i = 1; i <= ctx.slavecount; i++) {
       CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
-                    (CiA402_Outputs *)ctx.slavelist[i].outputs};
+		    (CiA402_Outputs *)ctx.slavelist[i].outputs};
       m.set_mode_of_operation(
-            CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+	    CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
   }
-
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
   int flag = 1;
   RCLCPP_INFO(logger, "Going to operation_enabled");
   while (flag) {
     flag = 0;
     for (int i = 1; i <= ctx.slavecount; i++) {
-      CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
-                    (CiA402_Outputs *)ctx.slavelist[i].outputs};
+      CiA402_Inputs * motor_inputs = (CiA402_Inputs*)ctx.slavelist[i].inputs;
+      CiA402_Outputs * motor_outputs = (CiA402_Outputs*)ctx.slavelist[i].outputs;
+      CiA402Motor m{motor_inputs, motor_outputs};
 
       RCLCPP_DEBUG(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
       if (!m.get_state().has_value()) {
 	flag = 1;
-	RCLCPP_INFO(logger, "Motor %d has no state", i);
+	RCLCPP_INFO(logger, "Motor %d has no decodable state: 0x%04X", i, ((CiA402_Inputs *)ctx.slavelist[i].inputs)->Statusword);
       } else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
-        m.to_operation_enabled();
-        flag = 1;
-      } else if (m.get_state().value() == CiA402Motor::State::FAULT) {
-	RCLCPP_INFO(logger, "Motor %d in fault. Fault handling not implemented. Exiting...", i);
-	std::exit(EXIT_FAILURE);
+	flag = 1;
+	if (m.get_state().value() == CiA402Motor::State::FAULT) {
+	  RCLCPP_INFO(logger, "Motor %d in fault. Trying to recover...", i);
+	  m.to_operation_enabled();
+	} else {
+	  m.to_operation_enabled();
+	}
       }
     }
     ecx_send_processdata(&ctx);
@@ -130,42 +135,6 @@ void ECManager::cyclic_loop() {
 
   while (running_) {
     next += period;
-    // perf_read() is wait-free - returns immediately if no new data
-    if (cmd_apsa.perf_read(motor_commands)) {
-      // New commands received! Apply them to EtherCAT nodes
-      for (int i = 1; i <= config.slavecount; i++) {
-        CiA402_Outputs *motor_outputs =
-          (CiA402_Outputs *)ctx.slavelist[i].outputs;
-	CiA402_Inputs *motor_inputs =
-          (CiA402_Inputs *)ctx.slavelist[i].inputs;
-
-	// guard statement
-	if (abs(motor_commands[i-1] - motor_inputs->PositionValue) > 100) {continue;}
-	//write value
-	motor_outputs->TargetPosition = motor_commands[i-1];
-	//RCLCPP_INFO(logger, "TargetPosition: %d, PositionValue: %d", motor_outputs->TargetPosition, motor_inputs->PositionValue);
-        RCLCPP_DEBUG(logger,
-                    "Motor Outputs:\n"
-                    "\tControlword: 0x%04X\n"
-                    "\tOpMode: %d\n"
-                    "\tTargetTorque: %d\n"
-                    "\tTargetPosition: %d\n"
-                    "\tTargetVelocity: %d\n"
-                    "\tTorqueOffset: %d\n"
-                    "\tTuningCommand: %d\n"
-                    "\tPhysicalOutputs: %d\n"
-                    "\tBitMask: 0x%08X\n"
-                    "\tUserMOSI: 0x%08X\n"
-                    "\tVelocityOffset: %d\n",
-                    motor_outputs->Controlword, motor_outputs->OpMode,
-                    motor_outputs->TargetTorque, motor_outputs->TargetPosition,
-                    motor_outputs->TargetVelocity, motor_outputs->TorqueOffset,
-                    motor_outputs->TuningCommand, motor_outputs->PhysicalOutputs,
-                    motor_outputs->BitMask, motor_outputs->UserMOSI,
-                    motor_outputs->VelocityOffset);
-      }
-    }
-    // If no new commands, EtherCAT nodes keep executing previous commands
 
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
@@ -174,45 +143,73 @@ void ECManager::cyclic_loop() {
       RCLCPP_WARN(logger, "Not all nodes responded");
     }
 
-    for (int i = 1; i <= ctx.slavecount; i++) {
+    // Iterate over connected drives
+    for (int i = 1; i <= config.slavecount; i++) {
+      CiA402_Outputs *motor_outputs =
+	(CiA402_Outputs *)ctx.slavelist[i].outputs;
       CiA402_Inputs *motor_inputs =
-          (CiA402_Inputs *)ctx.slavelist[i].inputs;
+	(CiA402_Inputs *)ctx.slavelist[i].inputs;
+
+      if (cmd_apsa.perf_read(motor_commands)) {
+	// New commands received! Apply them to EtherCAT nodes
+	motor_outputs->TargetPosition = motor_commands[i-1];
+	RCLCPP_DEBUG(logger,
+		     "Motor Outputs:\n"
+		     "\tControlword: 0x%04X\n"
+		     "\tOpMode: %d\n"
+		     "\tTargetTorque: %d\n"
+		     "\tTargetPosition: %d\n"
+		     "\tTargetVelocity: %d\n"
+		     "\tTorqueOffset: %d\n"
+		     "\tTuningCommand: %d\n"
+		     "\tPhysicalOutputs: %d\n"
+		     "\tBitMask: 0x%08X\n"
+		     "\tUserMOSI: 0x%08X\n"
+		     "\tVelocityOffset: %d\n",
+		     motor_outputs->Controlword, motor_outputs->OpMode,
+		     motor_outputs->TargetTorque, motor_outputs->TargetPosition,
+		     motor_outputs->TargetVelocity, motor_outputs->TorqueOffset,
+		     motor_outputs->TuningCommand, motor_outputs->PhysicalOutputs,
+		     motor_outputs->BitMask, motor_outputs->UserMOSI,
+		     motor_outputs->VelocityOffset);
+      }
+
       motor_feedback[i-1] = motor_inputs->PositionValue;
       RCLCPP_DEBUG(logger,
-             "Motor Inputs:\n"
-             "\tStatusword: 0x%04X\n"
-             "\tOpModeDisplay: %d\n"
-             "\tPositionValue: %d\n"
-             "\tVelocityValue: %d\n"
-             "\tTorqueValue: %d\n"
-             "\tAnalogInput1: %u\n"
-             "\tAnalogInput2: %u\n"
-             "\tAnalogInput3: %u\n"
-             "\tAnalogInput4: %u\n"
-             "\tTuningStatus: 0x%08X\n"
-             "\tDigitalInputs: 0x%08X\n"
-             "\tUserMISO: 0x%08X\n"
-             "\tTimestamp: %u\n"
-             "\tPositionDemandInternalValue: %d\n"
-             "\tVelocityDemandValue: %d\n"
-             "\tTorqueDemand: %d\n",
-             motor_inputs->Statusword,
-             motor_inputs->OpModeDisplay,
-             motor_inputs->PositionValue,
-             motor_inputs->VelocityValue,
-             motor_inputs->TorqueValue,
-             motor_inputs->AnalogInput1,
-             motor_inputs->AnalogInput2,
-             motor_inputs->AnalogInput3,
-             motor_inputs->AnalogInput4,
-             motor_inputs->TuningStatus,
-             motor_inputs->DigitalInputs,
-             motor_inputs->UserMISO,
-             motor_inputs->Timestamp,
-             motor_inputs->PositionDemandInternalValue,
-             motor_inputs->VelocityDemandValue,
-             motor_inputs->TorqueDemand
-	     );
+		   "Motor Inputs:\n"
+		   "\tStatusword: 0x%04X\n"
+		   "\tOpModeDisplay: %d\n"
+		   "\tPositionValue: %d\n"
+		   "\tVelocityValue: %d\n"
+		   "\tTorqueValue: %d\n"
+		   "\tAnalogInput1: %u\n"
+		   "\tAnalogInput2: %u\n"
+		   "\tAnalogInput3: %u\n"
+		   "\tAnalogInput4: %u\n"
+		   "\tTuningStatus: 0x%08X\n"
+		   "\tDigitalInputs: 0x%08X\n"
+		   "\tUserMISO: 0x%08X\n"
+		   "\tTimestamp: %u\n"
+		   "\tPositionDemandInternalValue: %d\n"
+		   "\tVelocityDemandValue: %d\n"
+		   "\tTorqueDemand: %d\n",
+		   motor_inputs->Statusword,
+		   motor_inputs->OpModeDisplay,
+		   motor_inputs->PositionValue,
+		   motor_inputs->VelocityValue,
+		   motor_inputs->TorqueValue,
+		   motor_inputs->AnalogInput1,
+		   motor_inputs->AnalogInput2,
+		   motor_inputs->AnalogInput3,
+		   motor_inputs->AnalogInput4,
+		   motor_inputs->TuningStatus,
+		   motor_inputs->DigitalInputs,
+		   motor_inputs->UserMISO,
+		   motor_inputs->Timestamp,
+		   motor_inputs->PositionDemandInternalValue,
+		   motor_inputs->VelocityDemandValue,
+		   motor_inputs->TorqueDemand
+		   );
     }
 
     // Make feedback available to ROS publisher (wait-free)
@@ -225,16 +222,25 @@ void ECManager::cyclic_loop() {
   RCLCPP_INFO(logger, "Exiting cyclic loop");
 
   // Shut down motors
-  for (int i = 1; i <= ctx.slavecount; i++) {
-    CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
-                    (CiA402_Outputs *)ctx.slavelist[i].outputs};
-    m.to_switch_on_disabled();
-  }
-  ecx_send_processdata(&ctx);
-  wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+  while (flag) {
+    flag = 0;
+    for (int i = 1; i <= ctx.slavecount; i++) {
+      CiA402_Inputs * motor_inputs = (CiA402_Inputs*)ctx.slavelist[i].inputs;
+      CiA402_Outputs * motor_outputs = (CiA402_Outputs*)ctx.slavelist[i].outputs;
+      CiA402Motor m{motor_inputs, motor_outputs};
 
-  if (wkc != expectedWKC) {
-    RCLCPP_WARN(logger, "Not all nodes responded");
+      RCLCPP_DEBUG(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
+      if (!m.get_state().has_value()) {
+	flag = 1;
+	RCLCPP_INFO(logger, "Motor %d has no decodable state: 0x%04X", i, ((CiA402_Inputs *)ctx.slavelist[i].inputs)->Statusword);
+      } else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
+	m.to_switch_on_disabled();
+	flag = 1;
+      }
+    }
+    transition_ec(EC_STATE_PRE_OP);
+    ecx_send_processdata(&ctx);
+    ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
   }
 }
 
