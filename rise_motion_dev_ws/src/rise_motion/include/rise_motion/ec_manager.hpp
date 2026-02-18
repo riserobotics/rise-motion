@@ -1,10 +1,10 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
-#include <mutex>
 #include <rclcpp/logger.hpp>
 #include <soem/soem.h>
 #include <vector>
+
 #include "apsa.hpp"
 
 #define IOMAP_SIZE 4096
@@ -26,6 +26,7 @@ public:
   void set_motor_values(std::vector<int32_t>& motor_values);
 
 private:
+  void transition_ec(uint16 state);
   void transition_to_operational();
 
   // EtherCAT context and configuration

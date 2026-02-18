@@ -248,10 +248,46 @@ bool ECManager::get_motor_values_apsa(std::vector<int32_t> &motor_values) {
   return feedback_apsa.comm_read(motor_values);
 }
 
-
-bool ECManager::set_motor_values_apsa(const std::vector<int32_t> &motor_values) {
+bool ECManager::set_motor_values_apsa(
+    const std::vector<int32_t> &motor_values) {
   // comm_write() queues the data for the EtherCAT loop to pick up
   return cmd_apsa.comm_write(motor_values);
 }
 
 rclcpp::Logger ECManager::logger = rclcpp::get_logger("ECManager");
+
+void ECManager::transition_ec(uint16 state) {
+  std::string state_string = "Unknown";
+  switch (state) {
+  case EC_STATE_PRE_OP:
+    state_string = "EC_STATE_PRE_OP";
+    break;
+  case EC_STATE_SAFE_OP:
+    state_string = "EC_STATE_SAFE_OP";
+    break;
+  case EC_STATE_OPERATIONAL:
+    state_string = "EC_STATE_OPERATIONAL";
+    break;
+  }
+
+  RCLCPP_INFO(logger, "Transition Ethercat State to %s", state_string.c_str());
+
+  ctx.slavelist[0].state = state;
+  ecx_writestate(&ctx, 0);
+  ecx_statecheck(&ctx, 0, state, EC_TIMEOUTSTATE * 4);
+  ecx_send_processdata(&ctx);
+  ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+  if (ctx.slavelist[0].state != state) {
+    RCLCPP_INFO(logger, "Not all nodes reached %d state", state);
+    ecx_readstate(&ctx);
+    for (int i = 1; i <= ctx.slavecount; i++)
+      {
+	if (ctx.slavelist[i].state != state)
+	  {
+	    RCLCPP_INFO(logger, "Node %d State=%2x StatusCode=%4x : %s",
+			i, ctx.slavelist[i].state, ctx.slavelist[i].ALstatuscode, ec_ALstatuscode2string(ctx.slavelist[i].ALstatuscode));
+	  }
+      }
+    std::exit(EXIT_FAILURE);
+  }
+}
