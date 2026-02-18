@@ -1,6 +1,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion/cia402.hpp>
@@ -13,15 +14,19 @@
 // expected config, needs to be retrieved from config node
 struct {
   int slavecount = 1;
-  ec_slavet slavelist[1] = {{.name = "WRONG_NAME"}};
 } config;
 
 ECManager::ECManager(const std::string interface) : interface(interface) {}
 
 void ECManager::init_ec() {
   int ret;
+
+  memset(&ctx, 0, sizeof(ctx));
+  memset(IOMap, 0, sizeof(IOMap));
+
+  ctx.packedMode = TRUE; // Not sure if necessary
+
   RCLCPP_INFO(logger, "Connecting to %s", interface.c_str());
-  ctx.packedMode = TRUE;
   ret = ecx_init(&ctx, interface.c_str());
   if (ret <= 0) {
     RCLCPP_WARN(logger, "Couldn't initialize SOEM context");
