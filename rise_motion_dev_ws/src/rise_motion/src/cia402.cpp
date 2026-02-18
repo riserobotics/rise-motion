@@ -45,10 +45,12 @@ void CiA402Motor::to_operation_enabled() {
   case State::SWITCHED_ON:
     next_op = Operation::ENABLE_OPERATION;
     break;
+  case State::FAULT:
+    next_op = Operation::FAULT_RESET; // Remove in Production
+    break;
   case State::OPERATION_ENABLED:
   case State::QUICK_STOP_ACTIVE:
   case State::FAULT_REACTION_ACTIVE:
-  case State::FAULT:
   default:
     return;
   }
@@ -70,8 +72,11 @@ void CiA402Motor::to_switch_on_disabled() {
   case State::OPERATION_ENABLED:
   case State::QUICK_STOP_ACTIVE:
     next_op = Operation::SHUTDOWN;
-  case State::FAULT_REACTION_ACTIVE:
+    break;
   case State::FAULT:
+    next_op = Operation::FAULT_RESET; // Remove in Production
+    break;
+  case State::FAULT_REACTION_ACTIVE:
   case State::SWITCH_ON_DISABLED:
   case State::READY_TO_SWITCH_ON:
   case State::SWITCHED_ON:
