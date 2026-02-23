@@ -70,16 +70,20 @@ void CiA402Motor::to_switch_on_disabled() {
   std::optional<Operation> next_op = std::nullopt;
   switch (s.value()) {
   case State::OPERATION_ENABLED:
+    next_op = Operation::DISABLE_OPERATION;
+    break;
+  case State::SWITCHED_ON:
   case State::QUICK_STOP_ACTIVE:
     next_op = Operation::SHUTDOWN;
     break;
   case State::FAULT:
     next_op = Operation::FAULT_RESET; // Remove in Production
     break;
+  case State::READY_TO_SWITCH_ON:
+    next_op = Operation::DISABLE_VOLTAGE;
+    break;
   case State::FAULT_REACTION_ACTIVE:
   case State::SWITCH_ON_DISABLED:
-  case State::READY_TO_SWITCH_ON:
-  case State::SWITCHED_ON:
   default:
     return;
   }
