@@ -26,7 +26,7 @@ public:
   void set_motor_values(std::vector<int32_t>& motor_values);
 
 private:
-  void transition_ec(uint16 state);
+  uint16 transition_ec(uint16 state);
   void transition_to_operational();
 
   // EtherCAT context and configuration
