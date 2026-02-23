@@ -76,8 +76,7 @@ void EthercatNode::enableServiceCallback(
 {
   if (request->enable && !ethercat_enabled_) {
     RCLCPP_INFO(get_logger(), "Enabling EtherCAT communication");
-    ec_manager_.init_ec();
-    ec_thread_ = std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
+    ec_thread_ = std::make_unique<std::thread>(&ECManager::run, &ec_manager_);
     ethercat_enabled_ = true;
   }
   else if (!request->enable && ethercat_enabled_) {

@@ -20,6 +20,11 @@ struct {
 
 ECManager::ECManager(const std::string interface) : interface(interface) {}
 
+void ECManager::run() {
+  init_ec();
+  cyclic_loop();
+}
+
 void ECManager::init_ec() {
   int ret;
 
