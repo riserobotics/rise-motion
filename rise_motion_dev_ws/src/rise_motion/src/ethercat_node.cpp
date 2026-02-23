@@ -21,7 +21,7 @@ EthercatNode::EthercatNode(ECManager& ec_manager)
 
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
     "enable_ethercat",
-    std::bind(&EthercatNode::enableServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
+    std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
 
   RCLCPP_INFO(get_logger(), "EtherCAT node initialized");
 }
