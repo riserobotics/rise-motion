@@ -100,25 +100,33 @@ void ECManager::cyclic_loop() {
 	    CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
   }
 
+  // Transition to OPERATIONAL
+  // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
+  uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
+  if (reached_state != EC_STATE_OPERATIONAL) {
+    std::exit(EXIT_FAILURE);
+  }
+
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
   {
     int flag = 1;
     RCLCPP_INFO(logger, "Going to operation_enabled");
     while (flag) {
+      next += period;
       flag = 0;
       for (int i = 1; i <= ctx.slavecount; i++) {
 	CiA402_Inputs * motor_inputs = (CiA402_Inputs*)ctx.slavelist[i].inputs;
 	CiA402_Outputs * motor_outputs = (CiA402_Outputs*)ctx.slavelist[i].outputs;
 	CiA402Motor m{motor_inputs, motor_outputs};
 
-	RCLCPP_DEBUG(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
+	RCLCPP_INFO(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
 	if (!m.get_state().has_value()) {
 	  flag = 1;
-	  RCLCPP_INFO(logger, "Motor %d has no decodable state: 0x%04X", i, ((CiA402_Inputs *)ctx.slavelist[i].inputs)->Statusword);
+	  RCLCPP_WARN(logger, "Motor %d has no decodable state: 0x%04X", i, ((CiA402_Inputs *)ctx.slavelist[i].inputs)->Statusword);
 	} else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
 	  flag = 1;
 	  if (m.get_state().value() == CiA402Motor::State::FAULT) {
-	    RCLCPP_INFO(logger, "Motor %d in fault. Trying to recover...", i);
+	    RCLCPP_WARN(logger, "Motor %d in fault. Trying to recover...", i);
 	    m.to_operation_enabled();
 	  } else {
 	    m.to_operation_enabled();
@@ -127,15 +135,11 @@ void ECManager::cyclic_loop() {
       }
       ecx_send_processdata(&ctx);
       ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+      std::this_thread::sleep_until(next);
     }
     RCLCPP_INFO(logger, "All motors in operation_enabled");
   }
 
-  // Transition to OPERATIONAL
-  uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
-  if (reached_state != EC_STATE_OPERATIONAL) {
-    std::exit(EXIT_FAILURE);
-  }
   RCLCPP_INFO(logger, "Entering Cyclic Loop");
   while (running_) {
     next += period;
@@ -236,11 +240,11 @@ void ECManager::cyclic_loop() {
 	CiA402_Outputs * motor_outputs = (CiA402_Outputs*)ctx.slavelist[i].outputs;
 	CiA402Motor m{motor_inputs, motor_outputs};
 
-	RCLCPP_DEBUG(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
+	RCLCPP_INFO(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
 	if (!m.get_state().has_value()) {
 	  flag = 1;
 	  RCLCPP_WARN(logger, "Motor %d has no decodable state: 0x%04X", i, motor_inputs->Statusword);
-	} else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
+	} else if (m.get_state().value() != CiA402Motor::State::SWITCH_ON_DISABLED) {
 	  m.to_switch_on_disabled();
 	  flag = 1;
 	}
@@ -251,15 +255,9 @@ void ECManager::cyclic_loop() {
     }
   }
 
-  /* Go to PRE_OP */
   transition_ec(EC_STATE_PRE_OP);
-
-  /* Go to SAFE_OP */
   transition_ec(EC_STATE_SAFE_OP);
-
-  /* Go to INIT state */
   transition_ec(EC_STATE_INIT);
-
 
   ecx_close(&ctx);
 }
@@ -284,6 +282,9 @@ uint16 ECManager::transition_ec(uint16 state) {
   std::string state_string = "Unknown";
   {
     switch (state) {
+    case EC_STATE_INIT:
+      state_string = "EC_STATE_INIT";
+      break;
     case EC_STATE_PRE_OP:
       state_string = "EC_STATE_PRE_OP";
       break;
@@ -302,10 +303,14 @@ uint16 ECManager::transition_ec(uint16 state) {
   ecx_writestate(&ctx, 0);
   int chk = 200;
   uint16 reached_state;
+  auto next = std::chrono::steady_clock::now();
+  auto period = std::chrono::milliseconds(1);
   do {
+    next += period;
     ecx_send_processdata(&ctx);
     ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
     reached_state = ecx_statecheck(&ctx, 0, state, EC_TIMEOUTSTATE * 4);
+    std::this_thread::sleep_until(next);
   } while (chk-- && (ctx.slavelist[0].state != state));
   if (reached_state != state) {
     RCLCPP_WARN(logger, "Couldn't transition to %s", state_string.c_str());
