@@ -161,6 +161,13 @@ void ECManager::cyclic_loop() {
 	(CiA402_Outputs *)ctx.slavelist[i].outputs;
       CiA402_Inputs *motor_inputs =
 	(CiA402_Inputs *)ctx.slavelist[i].inputs;
+      CiA402Motor m{motor_inputs, motor_outputs};
+
+      if (!m.get_state().has_value()) {
+	RCLCPP_ERROR(logger, "Motor %d has no state", i);
+      } else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
+	RCLCPP_ERROR(logger, "Motor %d is not in OPERATION_ENABLED", i);
+      }
 
       if (cmd_apsa.perf_read(motor_commands)) {
 	// New commands received! Apply them to EtherCAT nodes
