@@ -128,8 +128,10 @@ void ECManager::cyclic_loop() {
 	} else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
 	  flag = 1;
 	  if (m.get_state().value() == CiA402Motor::State::FAULT) {
-	    RCLCPP_WARN(logger, "Motor %d in fault. Trying to recover...", i);
-	    m.to_operation_enabled();
+	    RCLCPP_ERROR(logger, "Motor %d in fault. Exiting...", i);
+	    exit(EXIT_FAILURE);
+//	    RCLCPP_WARN(logger, "Motor %d in fault. Trying to recover...", i);
+//	    m.to_operation_enabled();
 	  } else {
 	    m.to_operation_enabled();
 	  }
