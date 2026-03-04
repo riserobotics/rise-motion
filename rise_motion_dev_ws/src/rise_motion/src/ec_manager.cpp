@@ -192,7 +192,7 @@ void ECManager::cyclic_loop() {
 		     motor_outputs->BitMask, motor_outputs->UserMOSI,
 		     motor_outputs->VelocityOffset);
       }
-
+      motor_outputs->TargetPosition = motor_commands[i-1];
       motor_feedback[i-1] = motor_inputs->PositionValue;
       RCLCPP_DEBUG(logger,
 		   "Motor Inputs:\n"
