@@ -87,20 +87,26 @@ void ECManager::cyclic_loop() {
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
 
-  // Configuring Drives
-  // Setting ModeOfOperation to CyclicSyncPositionMode
-  for (int i = 1; i <= ctx.slavecount; i++) {
-      CiA402Motor m{(CiA402_Inputs *)ctx.slavelist[i].inputs,
-		    (CiA402_Outputs *)ctx.slavelist[i].outputs};
-      m.set_mode_of_operation(
-	    CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
-  }
-
   // Transition to OPERATIONAL
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
   uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
   if (reached_state != EC_STATE_OPERATIONAL) {
     std::exit(EXIT_FAILURE);
+  }
+
+  // Configuring Drives
+  for (int i = 1; i <= ctx.slavecount; i++) {
+    CiA402_Outputs *motor_outputs =
+      (CiA402_Outputs *)ctx.slavelist[i].outputs;
+    CiA402_Inputs *motor_inputs =
+      (CiA402_Inputs *)ctx.slavelist[i].inputs;
+    CiA402Motor m{motor_inputs, motor_outputs};
+    // Setting ModeOfOperation to CyclicSyncPositionMode
+    m.set_mode_of_operation(CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+    // Set Position to Current Position
+    motor_commands[i-1] = motor_inputs->PositionValue;
+    motor_outputs->TargetPosition = motor_inputs->PositionValue;
+    RCLCPP_INFO(logger, "Configured Motor %d: (%d)", i, motor_inputs->PositionValue);
   }
 
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
