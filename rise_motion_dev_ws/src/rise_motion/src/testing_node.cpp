@@ -1,34 +1,40 @@
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <rclcpp/client.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion_messages/msg/motor_positions.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
 
-const int increment = 20;
+
 class TestNode : public rclcpp::Node {
 public:
-  TestNode() : Node("test_node") {
+  TestNode(int incs) : Node("test_node"), valid_positions(false), increment(incs) {
     // Subscribe to the input topic
     RCLCPP_INFO(get_logger(), "Starting TestNode");
     input_sub =
         this->create_subscription<rise_motion_messages::msg::MotorPositions>(
             "motor_feedback", 10,
             [this](rise_motion_messages::msg::MotorPositions msg) {
-              auto const &motor_pos = msg.positions;
-
-              // print_motor_positions(motor_pos, "Received");
-
-              auto response = rise_motion_messages::msg::MotorPositions();
-              response.positions.resize(motor_pos.size());
-              for (size_t i = 0; i < motor_pos.size(); i++) {
-                response.positions[i] = motor_pos[i] + increment;
+              if (!valid_positions) {
+                RCLCPP_INFO(get_logger(), "Got feedback");
+                valid_positions = true;
               }
-
-              output_pub->publish(response);
-              // print_motor_positions(response.positions, "Published");
+              motor_pos = msg.positions;
             });
+    publish_timer_ = create_wall_timer(std::chrono::milliseconds(1), [this]() {
+      if (!valid_positions)
+        return;
+      auto response = rise_motion_messages::msg::MotorPositions();
+      response.positions.resize(motor_pos.size());
+      for (size_t i = 0; i < motor_pos.size(); i++) {
+        response.positions[i] = motor_pos[i] + increment;
+      }
+
+      output_pub->publish(response);
+    });
 
     output_pub =
         this->create_publisher<rise_motion_messages::msg::MotorPositions>(
@@ -37,7 +43,9 @@ public:
     client = this->create_client<rise_motion_messages::srv::EnableEthercatSrv>(
         "enable_ethercat");
   }
-
+  ~TestNode() {
+    RCLCPP_INFO(get_logger(), "Bye :)");
+  }
   int request_enable_ethercat() {
     RCLCPP_INFO(get_logger(), "Incrementing motor position with %d", increment);
     RCLCPP_INFO(get_logger(), "Requesting Enable Ethercat");
@@ -61,10 +69,12 @@ public:
       return 1;
     }
     auto result = result_future.get();
+    RCLCPP_INFO(get_logger(), "Done requesting");
     return result->status_enable;
   }
 
 private:
+  std::vector<int> motor_pos;
   void print_motor_positions(std::vector<int32_t> const &motor_pos,
                              std::string const &prefix) {
     std::ostringstream oss;
@@ -80,6 +90,8 @@ private:
     RCLCPP_INFO(this->get_logger(), "%s: %s", prefix.c_str(),
                 oss.str().c_str());
   }
+
+  bool valid_positions;
   rclcpp::Subscription<rise_motion_messages::msg::MotorPositions>::SharedPtr
       input_sub;
   rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr
@@ -87,15 +99,20 @@ private:
 
   rclcpp::Client<rise_motion_messages::srv::EnableEthercatSrv>::SharedPtr
       client;
+  rclcpp::TimerBase::SharedPtr publish_timer_;
+  int increment;
 };
 
 int main(int argc, char **argv) {
+  int incs = 10;
+  if (argc >= 2) {
+    incs = atoi(argv[1]);
+  }
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<TestNode>();
+  auto node = std::make_shared<TestNode>(incs);
 
   while (!node->request_enable_ethercat()) {
   }
-
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
