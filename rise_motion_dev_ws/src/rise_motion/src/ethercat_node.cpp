@@ -76,10 +76,14 @@ void EthercatNode::enableServiceCallback(
 {
   if (request->enable && !ethercat_enabled_) {
     RCLCPP_INFO(get_logger(), "Enabling EtherCAT communication");
-    ec_thread_ = std::make_unique<std::thread>(&ECManager::run, &ec_manager_);
-    ethercat_enabled_ = true;
-  }
-  else if (!request->enable && ethercat_enabled_) {
+    if (ec_manager_.init_ec() == EXIT_FAILURE) {
+      RCLCPP_ERROR(get_logger(), "Couldn't init ethercat");
+    } else {
+      ec_thread_ =
+          std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
+      ethercat_enabled_ = true;
+    }
+  } else if (!request->enable && ethercat_enabled_) {
     RCLCPP_INFO(get_logger(), "Disabling EtherCAT communication");
     ec_manager_.stop();
     if (ec_thread_ && ec_thread_->joinable()) {

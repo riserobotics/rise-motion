@@ -20,12 +20,7 @@ struct {
 
 ECManager::ECManager(const std::string interface) : interface(interface) {}
 
-void ECManager::run() {
-  init_ec();
-  cyclic_loop();
-}
-
-void ECManager::init_ec() {
+int ECManager::init_ec() {
   int ret;
 
   memset(&ctx, 0, sizeof(ctx));
@@ -35,42 +30,42 @@ void ECManager::init_ec() {
   ret = ecx_init(&ctx, interface.c_str());
   if (ret <= 0) {
     RCLCPP_ERROR(logger, "Couldn't initialize SOEM context");
-    std::exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
   }
 
   RCLCPP_INFO(logger, "Discovering EC Nodes");
   ret = ecx_config_init(&ctx); // also requests PreOP state
   if (ret <= 0) {
     RCLCPP_ERROR(logger, "EC Nodes Discovery failed");
-    std::exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
   }
 
   // All nodes should be in EC_STATE_PRE_OP according to tutorial
   if (ecx_statecheck(&ctx, 0, EC_STATE_PRE_OP, EC_TIMEOUTSTATE * 4) !=
       EC_STATE_PRE_OP) {
     RCLCPP_ERROR(logger, "Not all nodes in EC_STATE_PRE_OP");
-    std::exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
   }
 
   // TODO: More extensive verification of network
   if (ctx.slavecount != config.slavecount) {
     RCLCPP_ERROR(logger, "Expected %d devices, but discovered %d",
 		config.slavecount, ctx.slavecount);
-    std::exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
   }
 
   RCLCPP_INFO(logger, "Mapping IO");
   ret = ecx_config_map_group(&ctx, IOMap, 0); // also requests SafeOP state
   if (ret > IOMAP_SIZE) {
     RCLCPP_ERROR(logger, "Couldn't map IO: Buffer to small");
-    std::exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
   }
 
   // All nodes should be in EC_STATE_SAFE_OP according to tutorial
   if (ecx_statecheck(&ctx, 0, EC_STATE_SAFE_OP, EC_TIMEOUTSTATE * 4) !=
       EC_STATE_SAFE_OP) {
     RCLCPP_ERROR(logger, "Not all nodes in EC_STATE_SAFE_OP");
-    std::exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
   }
 
   RCLCPP_INFO(logger, "Using %d of %lu bytes in IOMap", ret, sizeof(IOMap));
@@ -79,6 +74,7 @@ void ECManager::init_ec() {
 
   RCLCPP_INFO(logger, "Configuring distributed clock");
   ecx_configdc(&ctx);
+  return EXIT_SUCCESS;
 }
 
 void ECManager::cyclic_loop() {

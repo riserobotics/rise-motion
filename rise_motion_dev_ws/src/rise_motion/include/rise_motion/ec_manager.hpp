@@ -14,8 +14,7 @@ public:
   ECManager();
   ECManager(const std::string interface);
 
-  void run();
-  void init_ec();
+  int init_ec();
   void cyclic_loop();
   void stop();
 
