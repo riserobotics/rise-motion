@@ -16,6 +16,7 @@ public:
 
   int init_ec();
   void cyclic_loop();
+  bool is_running();
   void stop();
 
   // APSA-based motor value transfer (lock-free)

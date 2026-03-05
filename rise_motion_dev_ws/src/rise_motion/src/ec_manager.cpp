@@ -243,6 +243,8 @@ shutdown:
 
 void ECManager::stop() { running_ = false; }
 
+bool ECManager::is_running() { return running_; }
+
 bool ECManager::get_motor_values_apsa(std::vector<int32_t> &motor_values) {
   // comm_read() returns true if new data is available, false otherwise
   return feedback_apsa.comm_read(motor_values);
