@@ -18,7 +18,10 @@ struct {
   int slavecount = 1;
 } config;
 
-ECManager::ECManager(const std::string interface) : interface(interface) {}
+ECManager::ECManager(const std::string interface, int cycle_time)
+    : interface(interface), logger(rclcpp::get_logger("ECManager")),
+      next(std::chrono::steady_clock::now()),
+      period(std::chrono::milliseconds(cycle_time)) {}
 
 int ECManager::init_ec() {
   int ret;
@@ -87,10 +90,9 @@ int ECManager::init_ec() {
 
 void ECManager::cyclic_loop() {
   // Still in SAFE_OP, PDO transmission is available
+  next = std::chrono::steady_clock::now();
   running_ = true;
   int wkc;
-  auto next = std::chrono::steady_clock::now();
-  auto period = std::chrono::milliseconds(1);
 
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
@@ -295,8 +297,6 @@ bool ECManager::set_motor_values_apsa(
   return cmd_apsa.comm_write(motor_values);
 }
 
-rclcpp::Logger ECManager::logger = rclcpp::get_logger("ECManager");
-
 uint16 ECManager::transition_ec(uint16 state) {
   // Get state_string
   std::string state_string = "Unknown";
@@ -323,8 +323,7 @@ uint16 ECManager::transition_ec(uint16 state) {
   ecx_writestate(&ctx, 0);
   int chk = 200;
   uint16 reached_state;
-  auto next = std::chrono::steady_clock::now();
-  auto period = std::chrono::milliseconds(1);
+  next = std::chrono::steady_clock::now();
   do {
     next += period;
     ecx_send_processdata(&ctx);

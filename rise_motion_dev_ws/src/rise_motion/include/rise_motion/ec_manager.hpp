@@ -12,7 +12,7 @@
 class ECManager {
 public:
   ECManager();
-  ECManager(const std::string interface);
+  ECManager(const std::string interface, int cycle_period_ms);
 
   int init_ec();
   void cyclic_loop();
@@ -36,7 +36,10 @@ private:
   uint8_t IOMap[IOMAP_SIZE];
   std::atomic<bool> running_{false};
   const std::string interface;
-  static rclcpp::Logger logger;
+  const rclcpp::Logger logger;
+
+  std::chrono::time_point<std::chrono::steady_clock> next;
+  const std::chrono::duration<long, std::ratio<1,1000>> period; // period in ms
 
   // APSA instances for lock-free communication
   // cmd_apsa: ROS → EtherCAT (motor commands)
