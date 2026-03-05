@@ -126,6 +126,7 @@ void ECManager::cyclic_loop() {
   }
 
   RCLCPP_INFO(logger, "Entering Cyclic Loop");
+  next = std::chrono::steady_clock::now();
   while (running_) {
     next += period;
 
