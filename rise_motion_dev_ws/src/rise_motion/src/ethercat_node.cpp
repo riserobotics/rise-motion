@@ -70,7 +70,7 @@ void EthercatNode::commandCallback(
 void EthercatNode::publishFeedback() {
   std::vector<int32_t> positions;
 
-  if (ec_manager_.get_motor_values_apsa(positions)) {
+  if (ethercat_enabled_ && ec_manager_.get_motor_values_apsa(positions)) {
     auto msg = rise_motion_messages::msg::MotorPositions();
     msg.positions.assign(positions.begin(), positions.end());
     feedback_pub_->publish(msg);
