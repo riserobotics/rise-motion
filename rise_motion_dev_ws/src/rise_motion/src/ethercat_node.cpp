@@ -1,27 +1,30 @@
-#include <rise_motion/ethercat_node.hpp>
+#include <cstdlib>
 #include <functional>
+#include <rclcpp/logging.hpp>
+#include <rise_motion/ethercat_node.hpp>
 #include <vector>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-EthercatNode::EthercatNode(ECManager& ec_manager)
-  : Node("ethercat_node"), ec_manager_(ec_manager) {
+EthercatNode::EthercatNode(ECManager &ec_manager)
+    : Node("ethercat_node"), ec_manager_(ec_manager) {
 
   cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorPositions>(
-    "motor_commands", 10,
-    std::bind(&EthercatNode::commandCallback, this, _1));
+      "motor_commands", 10,
+      std::bind(&EthercatNode::commandCallback, this, _1));
 
   feedback_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
-    "motor_feedback", 10);
+      "motor_feedback", 10);
 
-  feedback_timer_ = create_wall_timer(
-    std::chrono::milliseconds(10),
-    std::bind(&EthercatNode::publishFeedback, this));
+  feedback_timer_ =
+      create_wall_timer(std::chrono::milliseconds(10),
+			std::bind(&EthercatNode::publishFeedback, this));
 
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
-    "enable_ethercat",
-    std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
+      "enable_ethercat",
+      std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
+
   sdo_read_srv_ = create_service<rise_motion_messages::srv::SDOReadSrv>(
       "sdo_read",
       std::bind(&EthercatNode::sdoReadServiceCallback, this, _1, _2));
@@ -78,16 +81,17 @@ void EthercatNode::publishFeedback() {
 }
 
 void EthercatNode::enableServiceCallback(
-  const std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Request> request,
-  std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Response> response)
-{
+    const std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Request>
+	request,
+    std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Response>
+	response) {
   if (request->enable && !ethercat_enabled_) {
     RCLCPP_INFO(get_logger(), "Enabling EtherCAT communication");
     if (ec_manager_.init_ec() == EXIT_FAILURE) {
       RCLCPP_ERROR(get_logger(), "Couldn't init ethercat");
     } else {
       ec_thread_ =
-          std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
+	  std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
       ethercat_enabled_ = true;
     }
   } else if (!request->enable && ethercat_enabled_) {

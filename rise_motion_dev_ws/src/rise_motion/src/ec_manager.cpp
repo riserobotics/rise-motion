@@ -111,12 +111,16 @@ void ECManager::cyclic_loop() {
     CiA402_Inputs *motor_inputs =
       (CiA402_Inputs *)ctx.slavelist[i].inputs;
     CiA402Motor m{motor_inputs, motor_outputs};
+
     // Setting ModeOfOperation to CyclicSyncPositionMode
-    m.set_mode_of_operation(CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+    m.set_mode_of_operation(
+        CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+
     // Set Position to Current Position
-    motor_commands[i-1] = motor_inputs->PositionValue;
+    motor_commands[i - 1] = motor_inputs->PositionValue;
     motor_outputs->TargetPosition = motor_inputs->PositionValue;
-    RCLCPP_INFO(logger, "Configured Motor %d: (%d)", i, motor_inputs->PositionValue);
+    RCLCPP_INFO(logger, "Configured Motor %d: Init Position(%d)", i,
+                motor_inputs->PositionValue);
   }
 
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
@@ -124,6 +128,8 @@ void ECManager::cyclic_loop() {
     RCLCPP_ERROR(logger, "Couldn't transition all motors to OPERATION_ENABLED");
     goto shutdown;
   }
+
+  RCLCPP_INFO(logger, "All motors in operation_enabled");
 
   RCLCPP_INFO(logger, "Entering Cyclic Loop");
   next = std::chrono::steady_clock::now();
@@ -156,66 +162,57 @@ void ECManager::cyclic_loop() {
         goto shutdown;
       }
 
-      if (cmd_apsa.perf_read(motor_commands)) {
-	// New commands received! Apply them to EtherCAT nodes
-	motor_outputs->TargetPosition = motor_commands[i-1];
-	RCLCPP_DEBUG(logger,
-		     "Motor Outputs:\n"
-		     "\tControlword: 0x%04X\n"
-		     "\tOpMode: %d\n"
-		     "\tTargetTorque: %d\n"
-		     "\tTargetPosition: %d\n"
-		     "\tTargetVelocity: %d\n"
-		     "\tTorqueOffset: %d\n"
-		     "\tTuningCommand: %d\n"
-		     "\tPhysicalOutputs: %d\n"
-		     "\tBitMask: 0x%08X\n"
-		     "\tUserMOSI: 0x%08X\n"
-		     "\tVelocityOffset: %d\n",
-		     motor_outputs->Controlword, motor_outputs->OpMode,
-		     motor_outputs->TargetTorque, motor_outputs->TargetPosition,
-		     motor_outputs->TargetVelocity, motor_outputs->TorqueOffset,
-		     motor_outputs->TuningCommand, motor_outputs->PhysicalOutputs,
-		     motor_outputs->BitMask, motor_outputs->UserMOSI,
-		     motor_outputs->VelocityOffset);
-      }
-      motor_outputs->TargetPosition = motor_commands[i-1];
-      motor_feedback[i-1] = motor_inputs->PositionValue;
+      // Try to get new data
+      cmd_apsa.perf_read(motor_commands);
+      motor_outputs->TargetPosition = motor_commands[i - 1];
+      motor_feedback[i - 1] = motor_inputs->PositionValue;
+
       RCLCPP_DEBUG(logger,
-		   "Motor Inputs:\n"
-		   "\tStatusword: 0x%04X\n"
-		   "\tOpModeDisplay: %d\n"
-		   "\tPositionValue: %d\n"
-		   "\tVelocityValue: %d\n"
-		   "\tTorqueValue: %d\n"
-		   "\tAnalogInput1: %u\n"
-		   "\tAnalogInput2: %u\n"
-		   "\tAnalogInput3: %u\n"
-		   "\tAnalogInput4: %u\n"
-		   "\tTuningStatus: 0x%08X\n"
-		   "\tDigitalInputs: 0x%08X\n"
-		   "\tUserMISO: 0x%08X\n"
-		   "\tTimestamp: %u\n"
-		   "\tPositionDemandInternalValue: %d\n"
-		   "\tVelocityDemandValue: %d\n"
-		   "\tTorqueDemand: %d\n",
-		   motor_inputs->Statusword,
-		   motor_inputs->OpModeDisplay,
-		   motor_inputs->PositionValue,
-		   motor_inputs->VelocityValue,
-		   motor_inputs->TorqueValue,
-		   motor_inputs->AnalogInput1,
-		   motor_inputs->AnalogInput2,
-		   motor_inputs->AnalogInput3,
-		   motor_inputs->AnalogInput4,
-		   motor_inputs->TuningStatus,
-		   motor_inputs->DigitalInputs,
-		   motor_inputs->UserMISO,
-		   motor_inputs->Timestamp,
-		   motor_inputs->PositionDemandInternalValue,
-		   motor_inputs->VelocityDemandValue,
-		   motor_inputs->TorqueDemand
-		   );
+                   "Motor Outputs:\n"
+                   "\tControlword: 0x%04X\n"
+                   "\tOpMode: %d\n"
+                   "\tTargetTorque: %d\n"
+                   "\tTargetPosition: %d\n"
+                   "\tTargetVelocity: %d\n"
+                   "\tTorqueOffset: %d\n"
+                   "\tTuningCommand: %d\n"
+                   "\tPhysicalOutputs: %d\n"
+                   "\tBitMask: 0x%08X\n"
+                   "\tUserMOSI: 0x%08X\n"
+                   "\tVelocityOffset: %d\n",
+                   motor_outputs->Controlword, motor_outputs->OpMode,
+                   motor_outputs->TargetTorque, motor_outputs->TargetPosition,
+                   motor_outputs->TargetVelocity, motor_outputs->TorqueOffset,
+                   motor_outputs->TuningCommand, motor_outputs->PhysicalOutputs,
+                   motor_outputs->BitMask, motor_outputs->UserMOSI,
+                   motor_outputs->VelocityOffset);
+      RCLCPP_DEBUG(
+          logger,
+          "Motor Inputs:\n"
+          "\tStatusword: 0x%04X\n"
+          "\tOpModeDisplay: %d\n"
+          "\tPositionValue: %d\n"
+          "\tVelocityValue: %d\n"
+          "\tTorqueValue: %d\n"
+          "\tAnalogInput1: %u\n"
+          "\tAnalogInput2: %u\n"
+          "\tAnalogInput3: %u\n"
+          "\tAnalogInput4: %u\n"
+          "\tTuningStatus: 0x%08X\n"
+          "\tDigitalInputs: 0x%08X\n"
+          "\tUserMISO: 0x%08X\n"
+          "\tTimestamp: %u\n"
+          "\tPositionDemandInternalValue: %d\n"
+          "\tVelocityDemandValue: %d\n"
+          "\tTorqueDemand: %d\n",
+          motor_inputs->Statusword, motor_inputs->OpModeDisplay,
+          motor_inputs->PositionValue, motor_inputs->VelocityValue,
+          motor_inputs->TorqueValue, motor_inputs->AnalogInput1,
+          motor_inputs->AnalogInput2, motor_inputs->AnalogInput3,
+          motor_inputs->AnalogInput4, motor_inputs->TuningStatus,
+          motor_inputs->DigitalInputs, motor_inputs->UserMISO,
+          motor_inputs->Timestamp, motor_inputs->PositionDemandInternalValue,
+          motor_inputs->VelocityDemandValue, motor_inputs->TorqueDemand);
     }
 
     // Make feedback available to ROS publisher (wait-free)
@@ -293,14 +290,13 @@ uint16 ECManager::transition_ec(uint16 state) {
   if (reached_state != state) {
     RCLCPP_WARN(logger, "Couldn't transition to %s", state_string.c_str());
     ecx_readstate(&ctx);
-    for (int i = 1; i <= ctx.slavecount; i++)
-      {
-	if (ctx.slavelist[i].state != state)
-	  {
-	    RCLCPP_WARN(logger, "Node %d State=%2x StatusCode=%4x : %s",
-			i, ctx.slavelist[i].state, ctx.slavelist[i].ALstatuscode, ec_ALstatuscode2string(ctx.slavelist[i].ALstatuscode));
-	  }
+    for (int i = 1; i <= ctx.slavecount; i++) {
+      if (ctx.slavelist[i].state != state) {
+        RCLCPP_WARN(logger, "Node %d State=%2x StatusCode=%4x : %s", i,
+                    ctx.slavelist[i].state, ctx.slavelist[i].ALstatuscode,
+                    ec_ALstatuscode2string(ctx.slavelist[i].ALstatuscode));
       }
+    }
   }
   return reached_state;
 }
