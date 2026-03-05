@@ -120,38 +120,9 @@ void ECManager::cyclic_loop() {
   }
 
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
-  {
-    int flag = 1;
-    RCLCPP_INFO(logger, "Going to operation_enabled");
-    while (flag) {
-      next += period;
-      flag = 0;
-      for (int i = 1; i <= ctx.slavecount; i++) {
-	CiA402_Inputs * motor_inputs = (CiA402_Inputs*)ctx.slavelist[i].inputs;
-	CiA402_Outputs * motor_outputs = (CiA402_Outputs*)ctx.slavelist[i].outputs;
-	CiA402Motor m{motor_inputs, motor_outputs};
-
-	RCLCPP_INFO(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
-	if (!m.get_state().has_value()) {
-	  flag = 1;
-	  RCLCPP_WARN(logger, "Motor %d has no decodable state: 0x%04X", i, ((CiA402_Inputs *)ctx.slavelist[i].inputs)->Statusword);
-	} else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
-	  flag = 1;
-	  if (m.get_state().value() == CiA402Motor::State::FAULT) {
-	    RCLCPP_ERROR(logger, "Motor %d in fault. Exiting...", i);
-	    exit(EXIT_FAILURE);
-//	    RCLCPP_WARN(logger, "Motor %d in fault. Trying to recover...", i);
-//	    m.to_operation_enabled();
-	  } else {
-	    m.to_operation_enabled();
-	  }
-	}
-      }
-      ecx_send_processdata(&ctx);
-      ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
-      std::this_thread::sleep_until(next);
-    }
-    RCLCPP_INFO(logger, "All motors in operation_enabled");
+  if (!transition_motors_to(CiA402Motor::State::OPERATION_ENABLED)) {
+    RCLCPP_ERROR(logger, "Couldn't transition all motors to OPERATION_ENABLED");
+    goto shutdown;
   }
 
   RCLCPP_INFO(logger, "Entering Cyclic Loop");
@@ -249,32 +220,11 @@ void ECManager::cyclic_loop() {
     std::this_thread::sleep_until(next);
   }
 
+shutdown:
   RCLCPP_INFO(logger, "Exiting cyclic loop");
-
-  // Transitioning Motors to SWITCH_ON_DISABLED
-  {
-    int flag = 1;
-    while (flag) {
-      next += period;
-      flag = 0;
-      for (int i = 1; i <= ctx.slavecount; i++) {
-	CiA402_Inputs * motor_inputs = (CiA402_Inputs*)ctx.slavelist[i].inputs;
-	CiA402_Outputs * motor_outputs = (CiA402_Outputs*)ctx.slavelist[i].outputs;
-	CiA402Motor m{motor_inputs, motor_outputs};
-
-	RCLCPP_INFO(logger, "State of Motor %d: %s", i, m.state_as_string().c_str());
-	if (!m.get_state().has_value()) {
-	  flag = 1;
-	  RCLCPP_WARN(logger, "Motor %d has no decodable state: 0x%04X", i, motor_inputs->Statusword);
-	} else if (m.get_state().value() != CiA402Motor::State::SWITCH_ON_DISABLED) {
-	  m.to_switch_on_disabled();
-	  flag = 1;
-	}
-      }
-      ecx_send_processdata(&ctx);
-      ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
-      std::this_thread::sleep_until(next);
-    }
+  if (!transition_motors_to(CiA402Motor::State::SWITCH_ON_DISABLED)) {
+    RCLCPP_ERROR(logger,
+                 "Couldn't transition all motors to SWITCH_ON_DISABLED");
   }
 
   transition_ec(EC_STATE_PRE_OP);
@@ -377,3 +327,40 @@ bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
   return true;
 }
 
+bool ECManager::transition_motors_to(CiA402Motor::State state) {
+  int tries_left = 1000;
+  int continue_flag = 1;
+  next = std::chrono::steady_clock::now();
+  while (continue_flag && tries_left > 0) {
+    next += period;
+    tries_left--;
+    continue_flag = 0;
+    for (int i = 1; i <= ctx.slavecount; i++) {
+      CiA402_Inputs *motor_inputs = (CiA402_Inputs *)ctx.slavelist[i].inputs;
+      CiA402_Outputs *motor_outputs =
+          (CiA402_Outputs *)ctx.slavelist[i].outputs;
+      CiA402Motor m{motor_inputs, motor_outputs};
+      RCLCPP_DEBUG(logger, "State of Motor %d: %s", i,
+                   m.state_as_string().c_str());
+      if (!m.get_state().has_value()) {
+        continue_flag = 1;
+        RCLCPP_WARN(logger, "Motor %d has no decodable state: 0x%04X", i,
+                    motor_inputs->Statusword);
+      } else if (m.get_state().value() == CiA402Motor::State::FAULT) {
+        RCLCPP_ERROR(logger, "Motor %d in fault", i);
+        return false;
+      } else if (m.get_state().value() != state) {
+        m.transition_to(state);
+        continue_flag = 1;
+      }
+    }
+    ecx_send_processdata(&ctx);
+    ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+    std::this_thread::sleep_until(next);
+  }
+  if (continue_flag) {
+    RCLCPP_ERROR(logger, "Couldn't transition motors in time");
+    return false;
+  }
+  return true;
+}

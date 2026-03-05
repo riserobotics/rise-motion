@@ -28,7 +28,7 @@ public:
 
 private:
   uint16 transition_ec(uint16 state);
-  void transition_to_operational();
+  bool transition_motors_to(CiA402Motor::State state);
 
   // EtherCAT context and configuration
   int expectedWKC;
