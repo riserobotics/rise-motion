@@ -70,6 +70,14 @@ int ECManager::init_ec() {
 
   RCLCPP_INFO(logger, "Using %d of %lu bytes in IOMap", ret, sizeof(IOMap));
 
+  // Enable mailboxes for SDO
+  for (int i = 1; i <= ctx.slavecount; i++) {
+    if (ctx.slavelist[i].CoEdetails > 0) {
+      ecx_slavembxcyclic(&ctx, i);
+      RCLCPP_INFO(logger, "Enabled mailbox for drive %d", i);
+    }
+  }
+
   expectedWKC = ctx.grouplist[0].outputsWKC * 2 + ctx.grouplist[0].inputsWKC;
 
   RCLCPP_INFO(logger, "Configuring distributed clock");
@@ -150,6 +158,7 @@ void ECManager::cyclic_loop() {
 
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+    ecx_mbxhandler(&ctx, 0, 4);
 
     if (wkc != expectedWKC) {
       RCLCPP_ERROR(logger, "Not all nodes responded");
@@ -337,3 +346,35 @@ uint16 ECManager::transition_ec(uint16 state) {
   }
   return reached_state;
 }
+
+bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
+                         std::vector<uint8> &value) {
+  int psize = 64;
+  uint8 *buf = new uint8[psize];
+
+  boolean CA = FALSE;
+  int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize,
+                        (void *)buf, EC_TIMEOUTRXM);
+
+  value.clear();
+  for (int i = 0; i < psize; i++) {
+    value.push_back(buf[i]);
+  }
+  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
+  //  return (wkc == expectedWKC);
+  return true;
+}
+
+bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
+                          std::vector<uint8> &value) {
+  int psize = value.size();
+  uint8 *buf = new uint8[psize];
+
+  boolean CA = FALSE;
+  int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
+                         (void *)buf, EC_TIMEOUTRXM);
+  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
+  //  return (wkc == expectedWKC);
+  return true;
+}
+

@@ -22,6 +22,13 @@ EthercatNode::EthercatNode(ECManager& ec_manager)
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
     "enable_ethercat",
     std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
+  sdo_read_srv_ = create_service<rise_motion_messages::srv::SDOReadSrv>(
+      "sdo_read",
+      std::bind(&EthercatNode::sdoReadServiceCallback, this, _1, _2));
+
+  sdo_write_srv_ = create_service<rise_motion_messages::srv::SDOWriteSrv>(
+      "sdo_write",
+      std::bind(&EthercatNode::sdoWriteServiceCallback, this, _1, _2));
 
   RCLCPP_INFO(get_logger(), "EtherCAT node initialized");
 }
@@ -93,4 +100,57 @@ void EthercatNode::enableServiceCallback(
   }
 
   response->status_enable = ethercat_enabled_ ? 1 : 0;
+}
+
+void EthercatNode::sdoReadServiceCallback(
+    const std::shared_ptr<rise_motion_messages::srv::SDOReadSrv::Request>
+	request,
+    std::shared_ptr<rise_motion_messages::srv::SDOReadSrv::Response> response) {
+
+  if (!ethercat_enabled_ || !ec_manager_.is_running()) {
+    response->status_code = 0;
+    return;
+  }
+
+  std::vector<uint8> value;
+  bool success = ec_manager_.sdo_read(request->device_id, request->index,
+				      request->subindex, value);
+
+    if (!success) {
+    RCLCPP_WARN(get_logger(), "Read failed");
+    response->status_code = 0;
+    return;
+  }
+
+  response->status_code = 1;
+  response->device_id	= request->device_id;
+  response->index	= request->index;
+  response->subindex	= request->subindex;
+  response->value	= value;
+  response->value_type	= 0;
+}
+void EthercatNode::sdoWriteServiceCallback(
+    const std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Request>
+	request,
+    std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Response>
+	response) {
+  if (!ethercat_enabled_ || !ec_manager_.is_running()) {
+    response->status_code = 0;
+    return;
+  }
+  RCLCPP_INFO(get_logger(), "Got sdo_write request");
+  bool success = ec_manager_.sdo_write(request->device_id, request->index,
+				       request->subindex, request->value);
+  RCLCPP_INFO(get_logger(), "%d", success);
+  if (!success) {
+    RCLCPP_INFO(get_logger(), "Write failed");
+    response->status_code = 0;
+    return;
+  }
+
+  response->status_code = 1;
+  response->device_id	= request->device_id;
+  response->index	= request->index;
+  response->subindex	= request->subindex;
+  response->value_type	= 0;
 }
