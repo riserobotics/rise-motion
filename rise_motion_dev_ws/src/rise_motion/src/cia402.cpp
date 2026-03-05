@@ -23,6 +23,24 @@ bool CiA402Motor::is_state(State s) const {
   }
 }
 
+void CiA402Motor::transition_to(State s) {
+  switch (s) {
+  case State::SWITCH_ON_DISABLED:
+    to_switch_on_disabled();
+    break;
+  case State::OPERATION_ENABLED:
+    to_operation_enabled();
+    break;
+  case State::NOT_READY_TO_SWITCH_ON:
+  case State::READY_TO_SWITCH_ON:
+  case State::SWITCHED_ON:
+  case State::QUICK_STOP_ACTIVE:
+  case State::FAULT_REACTION_ACTIVE:
+  case State::FAULT:
+    break;
+  }
+}
+
 bool CiA402Motor::is_operation_enabled() const {
   return is_state(State::OPERATION_ENABLED);
 }
