@@ -101,7 +101,7 @@ void ECManager::cyclic_loop() {
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
   uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
   if (reached_state != EC_STATE_OPERATIONAL) {
-    std::exit(EXIT_FAILURE);
+    goto shutdown;
   }
 
   // Configuring Drives
@@ -135,6 +135,7 @@ void ECManager::cyclic_loop() {
 
     if (wkc != expectedWKC) {
       RCLCPP_ERROR(logger, "Not all nodes responded");
+      goto shutdown;
     }
 
     // Iterate over connected drives
@@ -146,9 +147,12 @@ void ECManager::cyclic_loop() {
       CiA402Motor m{motor_inputs, motor_outputs};
 
       if (!m.get_state().has_value()) {
-	RCLCPP_ERROR(logger, "Motor %d has no state", i);
-      } else if (m.get_state().value() != CiA402Motor::State::OPERATION_ENABLED) {
-	RCLCPP_ERROR(logger, "Motor %d is not in OPERATION_ENABLED", i);
+        RCLCPP_ERROR(logger, "Motor %d has no state", i);
+        goto shutdown;
+      } else if (m.get_state().value() !=
+                 CiA402Motor::State::OPERATION_ENABLED) {
+        RCLCPP_ERROR(logger, "Motor %d is not in OPERATION_ENABLED", i);
+        goto shutdown;
       }
 
       if (cmd_apsa.perf_read(motor_commands)) {
@@ -232,6 +236,8 @@ shutdown:
   transition_ec(EC_STATE_INIT);
 
   ecx_close(&ctx);
+  RCLCPP_INFO(logger, "Exiting");
+  stop();
 }
 
 void ECManager::stop() { running_ = false; }
