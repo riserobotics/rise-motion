@@ -22,9 +22,9 @@ public:
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values);
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values);
 
-  // Legacy mutex-based methods (deprecated)
-  void get_motor_values(std::vector<int32_t>& motor_values);
-  void set_motor_values(std::vector<int32_t>& motor_values);
+  // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
+  bool sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
+  bool sdo_write(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
 
 private:
   uint16 transition_ec(uint16 state);
