@@ -110,6 +110,9 @@ public:
   void set_control_word(Operation op);
   void set_mode_of_operation(ModeOfOperation m);
 
+  CiA402_Inputs *inputs;
+  CiA402_Outputs *outputs;
+
 private:
   struct StatePattern {
     uint16_t mask;
@@ -145,7 +148,4 @@ private:
       {0b10001111, 0b00000111, Operation::DISABLE_OPERATION},
       {0b10001111, 0b00001111, Operation::ENABLE_OPERATION},
       {0b10000000, 0b10000000, Operation::FAULT_RESET}};
-
-  CiA402_Inputs *inputs;
-  CiA402_Outputs *outputs;
 };

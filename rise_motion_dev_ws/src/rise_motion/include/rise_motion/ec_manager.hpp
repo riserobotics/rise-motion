@@ -32,11 +32,14 @@ public:
 private:
   uint16 transition_ec(uint16 state);
   bool transition_motors_to(CiA402Motor::State state);
+  void shutdown();
 
   // EtherCAT context and configuration
   int expectedWKC;
   ecx_contextt ctx;
   uint8_t IOMap[IOMAP_SIZE];
+  std::vector<CiA402Motor> motors;
+
   std::atomic<bool> running_{false};
   const std::string interface;
   const rclcpp::Logger logger;
