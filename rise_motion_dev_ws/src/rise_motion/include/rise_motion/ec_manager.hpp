@@ -1,13 +1,13 @@
 #pragma once
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <rclcpp/logger.hpp>
 #include <soem/soem.h>
 #include <vector>
-#include <chrono>
 
-#include <rise_motion/cia402.hpp>
 #include <rise_motion/apsa.hpp>
+#include <rise_motion/cia402.hpp>
 
 #define IOMAP_SIZE 4096
 
@@ -16,11 +16,15 @@ public:
   ECManager();
   ECManager(const std::string interface, int cycle_period_ms);
 
+  enum class State { CONFIG, OP, STOPPED, COUNT };
+
+  void run();
   int init_ec();
   void cyclic_loop();
   bool is_running();
   void stop();
-
+  void set_state(State s);
+  static bool valid_state(int s);
   // APSA-based motor value transfer (lock-free)
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values);
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values);
@@ -33,12 +37,13 @@ private:
   uint16 transition_ec(uint16 state);
   bool transition_motors_to(CiA402Motor::State state);
   void shutdown();
-
+  void run_on_enter(State);
   // EtherCAT context and configuration
   int expectedWKC;
   ecx_contextt ctx;
   uint8_t IOMap[IOMAP_SIZE];
   std::vector<CiA402Motor> motors;
+  std::atomic<State> state = ECManager::State::STOPPED;
 
   std::atomic<bool> running_{false};
   const std::string interface;

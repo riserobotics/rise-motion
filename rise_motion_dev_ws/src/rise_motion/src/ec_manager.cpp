@@ -23,6 +23,100 @@ ECManager::ECManager(const std::string interface, int cycle_time)
       next(std::chrono::steady_clock::now()),
       period(std::chrono::milliseconds(cycle_time)) {}
 
+void ECManager::run() {
+  State prev_state;
+  std::vector<int32_t> motor_commands(ctx.slavecount, 0);
+  std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
+  int wkc;
+
+  // initialize the ethercat network
+  if (init_ec() == EXIT_FAILURE) {
+    RCLCPP_ERROR(logger, "Couldn't initialize EtherCAT");
+    return;
+  }
+  // if everything went well we should be in safeop
+  prev_state = State::STOPPED;
+  next = std::chrono::steady_clock::now();
+
+  while (true) {
+    next += period;
+    ecx_send_processdata(&ctx);
+    wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+    ecx_mbxhandler(&ctx, 0, 4);
+
+    if (wkc != expectedWKC) {
+      RCLCPP_ERROR(logger, "Not all nodes responded");
+    }
+
+    State current_state = state.load();
+    bool state_changed = current_state != prev_state;
+    if (state_changed) {
+      run_on_enter(current_state);
+    }
+    switch (current_state) {
+    case State::CONFIG:
+      break;
+    case State::OP:
+      // Get motor_commands
+      cmd_apsa.perf_read(motor_commands);
+      // Iterate over motors
+      for (size_t i = 0; i < motors.size(); i++) {
+        CiA402Motor &m = motors[i];
+        CiA402Motor::State motor_state = m.get_state();
+
+        if (motor_state == CiA402Motor::State::UNKNOWN) {
+          RCLCPP_ERROR(logger, "Motor %zu has no state", i + 1);
+        } else if (motor_state != CiA402Motor::State::OPERATION_ENABLED) {
+          RCLCPP_ERROR(
+              logger,
+              "Motor %zu is not in OPERATION_ENABLED, trying to recover...",
+              i + 1);
+          m.transition_to(CiA402Motor::State::OPERATION_ENABLED);
+        }
+
+        m.outputs->TargetPosition = motor_commands[i];
+        motor_feedback[i] = m.inputs->PositionValue;
+      }
+      // Share motor_feedback
+      feedback_apsa.perf_write(motor_feedback);
+      break;
+    case State::STOPPED:
+    default:
+      break;
+    }
+    prev_state = current_state;
+    std::this_thread::sleep_until(next);
+  }
+}
+
+void ECManager::run_on_enter(State s) {
+  switch (s) {
+  case State::CONFIG:
+    transition_ec(EC_STATE_SAFE_OP);
+    for (size_t i = 0; i < motors.size(); i++) {
+      CiA402Motor &m = motors[i];
+      // Setting ModeOfOperation to CyclicSyncPositionMode
+      m.set_mode_of_operation(
+          CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+      // Set Position to Current Position
+      m.outputs->TargetPosition = m.inputs->PositionValue;
+      RCLCPP_INFO(logger, "Configured Motor %zu: Init Position(%d)", i + 1,
+                  m.inputs->PositionValue);
+    }
+    break;
+  case State::OP:
+    transition_ec(EC_STATE_OPERATIONAL);
+    transition_motors_to(CiA402Motor::State::OPERATION_ENABLED);
+    break;
+  case State::STOPPED:
+    transition_motors_to(CiA402Motor::State::SWITCH_ON_DISABLED);
+    transition_ec(EC_STATE_SAFE_OP);
+    break;
+  default:
+    break;
+  }
+}
+
 int ECManager::init_ec() {
   int ret;
 
@@ -379,4 +473,9 @@ bool ECManager::transition_motors_to(CiA402Motor::State desired_state) {
     return false;
   }
   return true;
+}
+
+void ECManager::set_state(State s) { state.store(s); }
+bool ECManager::valid_state(int s) {
+  return (0 <= s && s < static_cast<int>(State::COUNT));
 }
