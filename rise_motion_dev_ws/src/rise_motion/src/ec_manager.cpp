@@ -25,8 +25,6 @@ ECManager::ECManager(const std::string interface, int cycle_time)
 
 void ECManager::run() {
   State prev_state;
-  std::vector<int32_t> motor_commands(ctx.slavecount, 0);
-  std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
   int wkc;
 
   // initialize the ethercat network
@@ -34,23 +32,33 @@ void ECManager::run() {
     RCLCPP_ERROR(logger, "Couldn't initialize EtherCAT");
     return;
   }
+  // ctx.slavecount is only available after init_ec
+  std::vector<int32_t> motor_commands(ctx.slavecount, 0);
+  std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
+  bool print_error = true;
+  RCLCPP_INFO(logger, "Ethercat intialized");
   // if everything went well we should be in safeop
   prev_state = State::STOPPED;
   next = std::chrono::steady_clock::now();
-
-  while (true) {
+  RCLCPP_INFO(logger, "Starting in State %d", static_cast<int>(state.load()));
+  running_ = true;
+  while (running_) {
     next += period;
+
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
     ecx_mbxhandler(&ctx, 0, 4);
-
-    if (wkc != expectedWKC) {
-      RCLCPP_ERROR(logger, "Not all nodes responded");
+    if (wkc != expectedWKC && print_error) {
+      RCLCPP_ERROR(logger, "Not all nodes responded: wkc=%d", wkc);
+      print_error = false;
     }
 
     State current_state = state.load();
     bool state_changed = current_state != prev_state;
     if (state_changed) {
+      RCLCPP_INFO(logger, "Transitioning to State %d",
+                  static_cast<int>(current_state));
+      print_error = true;
       run_on_enter(current_state);
     }
     switch (current_state) {
@@ -87,6 +95,7 @@ void ECManager::run() {
     prev_state = current_state;
     std::this_thread::sleep_until(next);
   }
+  ecx_close(&ctx);
 }
 
 void ECManager::run_on_enter(State s) {
@@ -356,22 +365,23 @@ bool ECManager::set_motor_values_apsa(
 
 uint16 ECManager::transition_ec(uint16 state) {
   // Get state_string
-  std::string state_string = "Unknown";
-  {
-    switch (state) {
-    case EC_STATE_INIT:
-      state_string = "EC_STATE_INIT";
-      break;
-    case EC_STATE_PRE_OP:
-      state_string = "EC_STATE_PRE_OP";
-      break;
-    case EC_STATE_SAFE_OP:
-      state_string = "EC_STATE_SAFE_OP";
-      break;
-    case EC_STATE_OPERATIONAL:
-      state_string = "EC_STATE_OPERATIONAL";
-      break;
-    }
+  std::string state_string;
+  switch (state) {
+  case EC_STATE_INIT:
+    state_string = "EC_STATE_INIT";
+    break;
+  case EC_STATE_PRE_OP:
+    state_string = "EC_STATE_PRE_OP";
+    break;
+  case EC_STATE_SAFE_OP:
+    state_string = "EC_STATE_SAFE_OP";
+    break;
+  case EC_STATE_OPERATIONAL:
+    state_string = "EC_STATE_OPERATIONAL";
+    break;
+  default:
+    state_string = "UNKNOWN";
+    break;
   }
 
   RCLCPP_INFO(logger, "Transition Ethercat State to %s", state_string.c_str());
@@ -408,15 +418,13 @@ bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
   uint8 *buf = new uint8[psize];
 
   boolean CA = FALSE;
-  int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize,
-                        (void *)buf, EC_TIMEOUTRXM);
+  ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize, (void *)buf,
+              EC_TIMEOUTRXM);
 
   value.clear();
   for (int i = 0; i < psize; i++) {
     value.push_back(buf[i]);
   }
-  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
-  //  return (wkc == expectedWKC);
   return true;
 }
 
@@ -426,10 +434,8 @@ bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
   uint8 *buf = new uint8[psize];
 
   boolean CA = FALSE;
-  int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
-                         (void *)buf, EC_TIMEOUTRXM);
-  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
-  //  return (wkc == expectedWKC);
+  ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize, (void *)buf,
+               EC_TIMEOUTRXM);
   return true;
 }
 

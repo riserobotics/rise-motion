@@ -33,8 +33,6 @@ EthercatNode::EthercatNode(ECManager &ec_manager)
       "sdo_write",
       std::bind(&EthercatNode::sdoWriteServiceCallback, this, _1, _2));
 
-  ec_thread_ = std::make_unique<std::thread>(&ECManager::run, &ec_manager_);
-
   RCLCPP_INFO(get_logger(), "EtherCAT node initialized");
 }
 
@@ -75,7 +73,7 @@ void EthercatNode::commandCallback(
 void EthercatNode::publishFeedback() {
   std::vector<int32_t> positions;
 
-  if (ethercat_enabled_ && ec_manager_.get_motor_values_apsa(positions)) {
+  if (ec_manager_.get_motor_values_apsa(positions)) {
     auto msg = rise_motion_messages::msg::MotorPositions();
     msg.positions.assign(positions.begin(), positions.end());
     feedback_pub_->publish(msg);
@@ -87,12 +85,20 @@ void EthercatNode::enableServiceCallback(
 	request,
     std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Response>
 	response) {
+  if (request->enable && !ethercat_enabled_) {
+    ec_thread_ = std::make_unique<std::thread>(&ECManager::run, &ec_manager_);
+  } else if (!request->enable && ethercat_enabled_) {
+    ec_manager_.stop();
+    if (ec_thread_ && ec_thread_->joinable()) {
+      ec_thread_->join();
+    }
+  }
   if (ECManager::valid_state(request->target)) {
     ec_manager_.set_state(static_cast<ECManager::State>(request->target));
-    response->status_enable = request->target;
-    return;
   }
-  response->status_enable = -1;
+
+    ethercat_enabled_ = request->enable;
+    response->status_enable = ethercat_enabled_;
 }
 
 void EthercatNode::sdoReadServiceCallback(
@@ -131,10 +137,8 @@ void EthercatNode::sdoWriteServiceCallback(
     response->status_code = 0;
     return;
   }
-  RCLCPP_INFO(get_logger(), "Got sdo_write request");
   bool success = ec_manager_.sdo_write(request->device_id, request->index,
 				       request->subindex, request->value);
-  RCLCPP_INFO(get_logger(), "%d", success);
   if (!success) {
     RCLCPP_INFO(get_logger(), "Write failed");
     response->status_code = 0;
