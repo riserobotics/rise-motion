@@ -1,6 +1,6 @@
 #pragma once
+#include <array>
 #include <cstdint>
-#include <optional>
 #include <string>
 
 #include <osal_defs.h>
@@ -53,6 +53,7 @@ public:
     QUICK_STOP_ACTIVE,
     FAULT_REACTION_ACTIVE,
     FAULT,
+    UNKNOWN
   };
 
   enum class Operation {
@@ -62,7 +63,8 @@ public:
     QUICK_STOP,
     DISABLE_OPERATION,
     ENABLE_OPERATION,
-    FAULT_RESET
+    FAULT_RESET,
+    NO_OP
   };
 
   // https://doc.synapticon.com/circulo/sw5.4/objects_html/6xxx/6060.html
@@ -88,16 +90,16 @@ public:
    * @brief Gets the motor's current state based on its status word.
    *
    * Compares the status word against predefined patterns. Returns the matching
-   * state, or `std::nullopt` if no match is found.
+   * state, or `State::UNKNOWN` if no match is found.
    *
-   * @return The motor's state if a match is found; otherwise, `std::nullopt`.
+   * @return The motor's state if a match is found; otherwise, `State::UNKNOWN`.
    *
    * @warning Returning `std::nullopt` indicates an unrecognized status word.
    *          Callers must handle this case to avoid undefined behavior.
    *
    * @see CiA402Motor::State, state_patterns
    */
-  std::optional<State> get_state() const;
+  State get_state() const;
   std::string state_as_string() const;
   bool is_state(State s) const;
   bool is_operation_enabled() const;
@@ -114,6 +116,96 @@ public:
   CiA402_Outputs *outputs;
 
 private:
+  // origin destination
+  constexpr static std::array<std::array<Operation, 8>, 8> transition_table{
+      {// Current State: NOT_READY_TO_SWITCH_ON (0)
+       {{
+           Operation::NO_OP, // NOT_READY_TO_SWITCH_ON
+           Operation::NO_OP, // SWITCH_ON_DISABLED
+           Operation::NO_OP, // READY_TO_SWITCH_ON
+           Operation::NO_OP, // SWITCHED_ON
+           Operation::NO_OP, // OPERATION_ENABLED
+           Operation::NO_OP, // QUICK_STOP_ACTIVE
+           Operation::NO_OP, // FAULT_REACTION_ACTIVE
+           Operation::NO_OP  // FAULT
+       }},
+       // Current State: SWITCH_ON_DISABLED (1)
+       {{
+           Operation::NO_OP,    // NOT_READY_TO_SWITCH_ON
+           Operation::NO_OP,    // SWITCH_ON_DISABLED
+           Operation::SHUTDOWN, // READY_TO_SWITCH_ON
+           Operation::SHUTDOWN, // SWITCHED_ON
+           Operation::SHUTDOWN, // OPERATION_ENABLED
+           Operation::SHUTDOWN, // QUICK_STOP_ACTIVE
+           Operation::NO_OP,    // FAULT_REACTION_ACTIVE
+           Operation::NO_OP     // FAULT
+       }},
+       // Current State: READY_TO_SWITCH_ON (2)
+       {{
+           Operation::NO_OP,           // NOT_READY_TO_SWITCH_ON
+           Operation::DISABLE_VOLTAGE, // SWITCH_ON_DISABLED
+           Operation::NO_OP,           // READY_TO_SWITCH_ON
+           Operation::SWITCH_ON,       // SWITCHED_ON
+           Operation::SWITCH_ON,       // OPERATION_ENABLED
+           Operation::SWITCH_ON,       // QUICK_STOP_ACTIVE
+           Operation::NO_OP,           // FAULT_REACTION_ACTIVE
+           Operation::NO_OP            // FAULT
+       }},
+       // Current State: SWITCHED_ON (3)
+       {{
+           Operation::NO_OP,            // NOT_READY_TO_SWITCH_ON
+           Operation::DISABLE_VOLTAGE,  // SWITCH_ON_DISABLED
+           Operation::SHUTDOWN,         // READY_TO_SWITCH_ON
+           Operation::NO_OP,            // SWITCHED_ON
+           Operation::ENABLE_OPERATION, // OPERATION_ENABLED
+           Operation::ENABLE_OPERATION, // QUICK_STOP_ACTIVE
+           Operation::NO_OP,            // FAULT_REACTION_ACTIVE
+           Operation::NO_OP             // FAULT
+       }},
+       // Current State: OPERATION_ENABLED (4)
+       {{
+           Operation::NO_OP,             // NOT_READY_TO_SWITCH_ON
+           Operation::DISABLE_VOLTAGE,   // SWITCH_ON_DISABLED
+           Operation::SHUTDOWN,          // READY_TO_SWITCH_ON
+           Operation::DISABLE_OPERATION, // SWITCHED_ON
+           Operation::NO_OP,             // OPERATION_ENABLED
+           Operation::QUICK_STOP,        // QUICK_STOP_ACTIVE
+           Operation::NO_OP,             // FAULT_REACTION_ACTIVE
+           Operation::NO_OP              // FAULT
+       }},
+       // Current State: QUICK_STOP_ACTIVE (5)
+       {{
+           Operation::NO_OP,            // NOT_READY_TO_SWITCH_ON
+           Operation::DISABLE_VOLTAGE,  // SWITCH_ON_DISABLED
+           Operation::ENABLE_OPERATION, // READY_TO_SWITCH_ON
+           Operation::ENABLE_OPERATION, // SWITCHED_ON
+           Operation::ENABLE_OPERATION, // OPERATION_ENABLED
+           Operation::NO_OP,            // QUICK_STOP_ACTIVE
+           Operation::NO_OP,            // FAULT_REACTION_ACTIVE
+           Operation::NO_OP             // FAULT
+       }},
+       // Current State: FAULT_REACTION_ACTIVE (6)
+       {{
+           Operation::NO_OP, // NOT_READY_TO_SWITCH_ON
+           Operation::NO_OP, // SWITCH_ON_DISABLED
+           Operation::NO_OP, // READY_TO_SWITCH_ON
+           Operation::NO_OP, // SWITCHED_ON
+           Operation::NO_OP, // OPERATION_ENABLED
+           Operation::NO_OP, // QUICK_STOP_ACTIVE
+           Operation::NO_OP, // FAULT_REACTION_ACTIVE
+           Operation::NO_OP  // FAULT
+       }},
+       // Current State: FAULT (7)
+       {{
+           Operation::NO_OP, // NOT_READY_TO_SWITCH_ON
+           Operation::NO_OP, // SWITCH_ON_DISABLED
+           Operation::NO_OP, // READY_TO_SWITCH_ON
+           Operation::NO_OP, // SWITCHED_ON
+           Operation::NO_OP, // OPERATION_ENABLED
+           Operation::NO_OP, // QUICK_STOP_ACTIVE
+           Operation::NO_OP, // FAULT_REACTION_ACTIVE
+           Operation::NO_OP  // FAULT
+       }}}};
   struct StatePattern {
     uint16_t mask;
     uint16_t value;

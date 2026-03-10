@@ -155,13 +155,13 @@ void ECManager::cyclic_loop() {
     // Iterate over connected drives
     for (size_t i = 0; i < motors.size(); i++) {
       CiA402Motor &m = motors[i];
+      CiA402Motor::State motor_state = m.get_state();
 
-      if (!m.get_state().has_value()) {
+      if (motor_state == CiA402Motor::State::UNKNOWN) {
         RCLCPP_ERROR(logger, "Motor %zu has no state", i + 1);
         shutdown();
         return;
-      } else if (m.get_state().value() !=
-                 CiA402Motor::State::OPERATION_ENABLED) {
+      } else if (motor_state != CiA402Motor::State::OPERATION_ENABLED) {
         RCLCPP_ERROR(logger, "Motor %zu is not in OPERATION_ENABLED", i + 1);
         shutdown();
         return;
@@ -339,7 +339,7 @@ bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
   return true;
 }
 
-bool ECManager::transition_motors_to(CiA402Motor::State state) {
+bool ECManager::transition_motors_to(CiA402Motor::State desired_state) {
   int tries_left = 1000;
   int continue_flag = 1;
   next = std::chrono::steady_clock::now();
@@ -351,16 +351,23 @@ bool ECManager::transition_motors_to(CiA402Motor::State state) {
       CiA402Motor &m = motors[i];
       RCLCPP_DEBUG(logger, "State of Motor %zu: %s", i + 1,
                    m.state_as_string().c_str());
-      if (!m.get_state().has_value()) {
+      CiA402Motor::State current_state = m.get_state();
+      switch (current_state) {
+      case CiA402Motor::State::UNKNOWN:
         continue_flag = 1;
         RCLCPP_WARN(logger, "Motor %zu has no decodable state: 0x%04X", i + 1,
                     m.inputs->Statusword);
-      } else if (m.get_state().value() == CiA402Motor::State::FAULT) {
+        break;
+      case CiA402Motor::State::FAULT:
         RCLCPP_ERROR(logger, "Motor %zu in fault", i + 1);
         return false;
-      } else if (m.get_state().value() != state) {
-        m.transition_to(state);
-        continue_flag = 1;
+        break;
+      default:
+        if (current_state != desired_state) {
+          m.transition_to(desired_state);
+          continue_flag = 1;
+        }
+        break;
       }
     }
     ecx_send_processdata(&ctx);
