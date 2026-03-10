@@ -33,6 +33,8 @@ EthercatNode::EthercatNode(ECManager &ec_manager)
       "sdo_write",
       std::bind(&EthercatNode::sdoWriteServiceCallback, this, _1, _2));
 
+  ec_thread_ = std::make_unique<std::thread>(&ECManager::run, &ec_manager_);
+
   RCLCPP_INFO(get_logger(), "EtherCAT node initialized");
 }
 
@@ -85,25 +87,12 @@ void EthercatNode::enableServiceCallback(
 	request,
     std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Response>
 	response) {
-  if (request->enable && !ethercat_enabled_) {
-    RCLCPP_INFO(get_logger(), "Enabling EtherCAT communication");
-    if (ec_manager_.init_ec() == EXIT_FAILURE) {
-      RCLCPP_ERROR(get_logger(), "Couldn't init ethercat");
-    } else {
-      ec_thread_ =
-	  std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
-      ethercat_enabled_ = true;
-    }
-  } else if (!request->enable && ethercat_enabled_) {
-    RCLCPP_INFO(get_logger(), "Disabling EtherCAT communication");
-    ec_manager_.stop();
-    if (ec_thread_ && ec_thread_->joinable()) {
-      ec_thread_->join();
-    }
-    ethercat_enabled_ = false;
+  if (ECManager::valid_state(request->target)) {
+    ec_manager_.set_state(static_cast<ECManager::State>(request->target));
+    response->status_enable = request->target;
+    return;
   }
-
-  response->status_enable = ethercat_enabled_ ? 1 : 0;
+  response->status_enable = -1;
 }
 
 void EthercatNode::sdoReadServiceCallback(
