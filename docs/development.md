@@ -69,13 +69,15 @@ SDO-Calls (`/sdo_read`, `/sdo_write`) sind optional und dienen nur zur Diagnose 
 
 Manuelle Commands an einen Motor schicken (ohne `testing_node`):
 ```bash
-# Einmalig:
-ros2 topic pub /motor_commands rise_motion_messages/msg/MotorPositions \
-  "{positions: [1000, 0, 0, 0, 0, 0], target: 0}"
+# Terminal 1
+ros2 run rise_motion rise_motion_main
 
-# Kontinuierlich (10 Hz):
+# Terminal 2 – EtherCAT manuell enablen
+ros2 service call /enable_ethercat rise_motion_messages/srv/EnableEthercatSrv "{enable: true}"
+
+# Terminal 3 – Commands schicken (kontinuierlich, 10 Hz)
 ros2 topic pub -r 10 /motor_commands rise_motion_messages/msg/MotorPositions \
-  "{positions: [1000, 0, 0, 0, 0, 0], target: 0}"
+  "{positions: [1000, 0, 0, 0, 0, 0]}"
 ```
 
 ### Ausführen (ohne Hardware, WSL2)
