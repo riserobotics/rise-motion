@@ -22,17 +22,17 @@
   ```
 
 ### Bauen
-```bash
-cd rise_motion_dev_ws
-colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-source install/setup.bash
-```
-
 Das Skript `rise_motion_dev_ws/build.sh` führt alle drei Schritte aus.
 
 ```bash
 cd ~/rise-motion/rise_motion_dev_ws
 ./build.sh
+```
+Intern macht das:
+```bash
+cd rise_motion_dev_ws
+colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+source install/setup.bash
 ```
 
 ### Netzwerkrechte setzen (einmalig nach Build)
@@ -45,7 +45,7 @@ sudo setcap cap_net_admin,cap_net_raw+eip build/rise_motion/rise_motion_main
 Setzt eine EtherCAT-Verbindung auf Interface `enp1s0` voraus (Linux-PC, **nicht WSL2**):
 ```bash
 # Terminal 1 – EtherCAT Node starten (benötigt Raw-Socket-Rechte)
-sudo -E ros2 run rise_motion rise_motion_main
+ros2 run rise_motion rise_motion_main
 
 # Terminal 2 – Test-Node starten
 # Ruft /enable_ethercat automatisch auf, bevor Commands gesendet werden.
@@ -66,6 +66,17 @@ Der `/enable_ethercat`-Call löst intern automatisch aus:
 3. CiA402-State-Machine → `OPERATION_ENABLED`
 
 SDO-Calls (`/sdo_read`, `/sdo_write`) sind optional und dienen nur zur Diagnose einzelner Drive-Register.
+
+Manuelle Commands an einen Motor schicken (ohne `testing_node`):
+```bash
+# Einmalig:
+ros2 topic pub /motor_commands rise_motion_messages/msg/MotorPositions \
+  "{positions: [1000, 0, 0, 0, 0, 0], target: 0}"
+
+# Kontinuierlich (10 Hz):
+ros2 topic pub -r 10 /motor_commands rise_motion_messages/msg/MotorPositions \
+  "{positions: [1000, 0, 0, 0, 0, 0], target: 0}"
+```
 
 ### Ausführen (ohne Hardware, WSL2)
 ```bash
