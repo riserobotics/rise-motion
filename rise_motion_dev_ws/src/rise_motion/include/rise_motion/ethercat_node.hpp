@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
-#include <rise_motion/ec_manager.hpp>
+#include <rise_motion/iec_manager.hpp>
 #include <rise_motion_messages/msg/motor_positions.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
 #include <rise_motion_messages/srv/sdo_read_srv.hpp>
@@ -10,11 +10,11 @@
 
 class EthercatNode : public rclcpp::Node {
 public:
-  explicit EthercatNode(ECManager& ec_manager);
+  explicit EthercatNode(IECManager& ec_manager);
   ~EthercatNode();
 
 private:
-  ECManager& ec_manager_;
+  IECManager& ec_manager_;
   std::unique_ptr<std::thread> ec_thread_;
   bool ethercat_enabled_{false};
 

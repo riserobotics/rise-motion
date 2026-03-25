@@ -6,28 +6,29 @@
 #include <vector>
 #include <chrono>
 
+#include <rise_motion/iec_manager.hpp>
 #include <rise_motion/cia402.hpp>
 #include <rise_motion/apsa.hpp>
 
 #define IOMAP_SIZE 4096
 
-class ECManager {
+class ECManager : public IECManager {
 public:
   ECManager();
   ECManager(const std::string interface, int cycle_period_ms);
 
-  int init_ec();
-  void cyclic_loop();
-  bool is_running();
-  void stop();
+  int init_ec() override;
+  void cyclic_loop() override;
+  bool is_running() override;
+  void stop() override;
 
   // APSA-based motor value transfer (lock-free)
-  bool get_motor_values_apsa(std::vector<int32_t>& motor_values);
-  bool set_motor_values_apsa(const std::vector<int32_t>& motor_values);
+  bool get_motor_values_apsa(std::vector<int32_t>& motor_values) override;
+  bool set_motor_values_apsa(const std::vector<int32_t>& motor_values) override;
 
   // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
-  bool sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
-  bool sdo_write(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
+  bool sdo_read(uint16_t device_id, uint16_t index, uint8_t subindex, std::vector<uint8_t>& value) override;
+  bool sdo_write(uint16_t device_id, uint16_t index, uint8_t subindex, std::vector<uint8_t>& value) override;
 
 private:
   uint16 transition_ec(uint16 state);

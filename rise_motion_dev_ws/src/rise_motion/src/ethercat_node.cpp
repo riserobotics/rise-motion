@@ -7,7 +7,7 @@
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-EthercatNode::EthercatNode(ECManager &ec_manager)
+EthercatNode::EthercatNode(IECManager &ec_manager)
     : Node("ethercat_node"), ec_manager_(ec_manager) {
 
   cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorPositions>(
@@ -91,7 +91,7 @@ void EthercatNode::enableServiceCallback(
       RCLCPP_ERROR(get_logger(), "Couldn't init ethercat");
     } else {
       ec_thread_ =
-	  std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
+	  std::make_unique<std::thread>([this]() { ec_manager_.cyclic_loop(); });
       ethercat_enabled_ = true;
     }
   } else if (!request->enable && ethercat_enabled_) {
@@ -116,7 +116,7 @@ void EthercatNode::sdoReadServiceCallback(
     return;
   }
 
-  std::vector<uint8> value;
+  std::vector<uint8_t> value;
   bool success = ec_manager_.sdo_read(request->device_id, request->index,
 				      request->subindex, value);
 

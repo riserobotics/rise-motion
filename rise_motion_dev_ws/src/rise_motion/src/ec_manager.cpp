@@ -308,10 +308,10 @@ uint16 ECManager::transition_ec(uint16 state) {
   return reached_state;
 }
 
-bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
-                         std::vector<uint8> &value) {
+bool ECManager::sdo_read(uint16_t device_id, uint16_t index, uint8_t subindex,
+                         std::vector<uint8_t> &value) {
   int psize = 64;
-  uint8 *buf = new uint8[psize];
+  uint8_t *buf = new uint8_t[psize];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize,
@@ -326,10 +326,10 @@ bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
   return true;
 }
 
-bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
-                          std::vector<uint8> &value) {
+bool ECManager::sdo_write(uint16_t device_id, uint16_t index, uint8_t subindex,
+                          std::vector<uint8_t> &value) {
   int psize = value.size();
-  uint8 *buf = new uint8[psize];
+  uint8_t *buf = new uint8_t[psize];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
