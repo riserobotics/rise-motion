@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rise_motion_messages/msg/admittance_debug.hpp>
 #include <rise_motion_messages/msg/motor_feedback_full.hpp>
 #include <rise_motion_messages/msg/motor_positions.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
@@ -53,6 +54,9 @@ public:
     cmd_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
         "motor_commands_vel", 10);
 
+    debug_pub_ = create_publisher<rise_motion_messages::msg::AdmittanceDebug>(
+        "admittance_debug", 10);
+
     compute_timer_ = create_wall_timer(
         std::chrono::milliseconds(1),
         std::bind(&AdmittanzNode::computeAdmittance, this));
@@ -93,6 +97,8 @@ private:
       feedback_sub_;
   rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr
       cmd_pub_;
+  rclcpp::Publisher<rise_motion_messages::msg::AdmittanceDebug>::SharedPtr
+      debug_pub_;
   rclcpp::Client<rise_motion_messages::srv::EnableEthercatSrv>::SharedPtr
       client_;
   rclcpp::TimerBase::SharedPtr compute_timer_;
@@ -135,34 +141,53 @@ private:
     const double vel_max        = get_parameter("vel_max").as_double();
     const double dvel_max       = get_parameter("dvel_max").as_double();
 
+    const size_t n = pos_current_.size();
     auto msg = rise_motion_messages::msg::MotorPositions();
-    msg.positions.resize(pos_current_.size());
+    msg.positions.resize(n);
 
-    for (size_t i = 0; i < pos_current_.size(); ++i) {
+    auto dbg = rise_motion_messages::msg::AdmittanceDebug();
+    dbg.adc_voltage.resize(n);
+    dbg.force.resize(n);
+    dbg.torque_raw.resize(n);
+    dbg.torque_clipped.resize(n);
+    dbg.vdot.resize(n);
+    dbg.velocity_raw.resize(n);
+    dbg.velocity_output.resize(n);
+    dbg.displacement.resize(n);
+
+    for (size_t i = 0; i < n; ++i) {
       // ADC → Voltage → Force → Torque
-      double V   = (static_cast<double>(analog_input1_[i]) - offset) / 65536.0 * 10.0;
-      double F   = V * sensitivity_inv;
-      double tau = F * lever_arm;
-
-      // Input clipping
-      tau = std::clamp(tau, -tau_max, tau_max);
+      double V        = (static_cast<double>(analog_input1_[i]) - offset) / 65536.0 * 10.0;
+      double F        = V * sensitivity_inv;
+      double tau_raw  = F * lever_arm;
+      double tau      = std::clamp(tau_raw, -tau_max, tau_max);
 
       // Admittance Euler integration
-      double vdot     = (tau - D_v * velocity_[i] - K_v * displacement_[i]) / M_v;
-      double v_prev   = velocity_[i];
-      velocity_[i]   += vdot * dt_;
+      double vdot   = (tau - D_v * velocity_[i] - K_v * displacement_[i]) / M_v;
+      double v_prev = velocity_[i];
+      velocity_[i] += vdot * dt_;
       displacement_[i] += velocity_[i] * dt_;
 
       // Output: jerk limit then velocity clamp
-      velocity_[i] = std::clamp(velocity_[i],
-                                 v_prev - dvel_max * dt_,
-                                 v_prev + dvel_max * dt_);
-      velocity_[i] = std::clamp(velocity_[i], -vel_max, vel_max);
+      double v_after_jerk = std::clamp(velocity_[i],
+                                        v_prev - dvel_max * dt_,
+                                        v_prev + dvel_max * dt_);
+      velocity_[i] = std::clamp(v_after_jerk, -vel_max, vel_max);
 
       msg.positions[i] = static_cast<int32_t>(velocity_[i]);
+
+      dbg.adc_voltage[i]    = V;
+      dbg.force[i]          = F;
+      dbg.torque_raw[i]     = tau_raw;
+      dbg.torque_clipped[i] = tau;
+      dbg.vdot[i]           = vdot;
+      dbg.velocity_raw[i]   = v_prev + vdot * dt_;
+      dbg.velocity_output[i] = velocity_[i];
+      dbg.displacement[i]   = displacement_[i];
     }
 
     cmd_pub_->publish(msg);
+    debug_pub_->publish(dbg);
   }
 };
 
