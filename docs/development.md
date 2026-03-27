@@ -82,20 +82,19 @@ ros2 topic pub -r 10 /motor_commands rise_motion_messages/msg/MotorPositions \
 
 ### Ausführen (ohne Hardware, WSL2)
 ```bash
-# Immer:
 source install/setup.bash
 
 # Terminal 1
 ros2 run rise_motion rise_motion_mock
 
-# (Terminal 2) Not needed!
-ros2 service call /enable_ethercat rise_motion_messages/srv/EnableEthercatSrv "{enable: true}"
+# Terminal 2 – testing_node ruft /enable_ethercat automatisch auf
+ros2 run rise_motion testing_node 1
 
-# Terminal 3
-ros2 run rise_motion testing_node
-
-# Terminal 4: Motor position validieren
+# Terminal 3 – Motor positions validieren
 ros2 topic echo /motor_feedback
+
+# Terminal 4 – Alle PDO-Felder inkl. Kraftsensor (analog_input1 = 1Hz-Sinus im Mock)
+ros2 topic echo /motor_feedback_full
 ```
 
 Der Mock simuliert einen Motor im RAM: Kommandos werden sofort als Feedback zurückgegeben. Kein EtherCAT, kein SOEM, keine Netzwerkrechte erforderlich.
