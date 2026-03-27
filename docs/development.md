@@ -6,8 +6,9 @@
 3. [Architekturübersicht](#3-architekturübersicht)
 4. [Komponenten](#4-komponenten)
 5. [ROS2 Interface](#5-ros2-interface)
-6. [Admittanzregelung](#6-admittanzregelung)
-7. [Entwicklungsplan](#7-entwicklungsplan)
+6. [Datenaufzeichnung](#6-datenaufzeichnung)
+7. [Admittanzregelung](#7-admittanzregelung)
+8. [Entwicklungsplan](#8-entwicklungsplan)
 
 ---
 
@@ -81,7 +82,15 @@ ros2 topic pub -r 10 /motor_commands rise_motion_messages/msg/MotorPositions \
 ```
 
 ### Ausführen (ohne Hardware, WSL2)
+Zuerst muss gebaut werden:
 ```bash
+cd ~/rise-motion/rise_motion_dev_ws
+./build.sh
+```
+Dann:
+```bash
+# In jedem Terminal
+cd ~/rise-motion/rise_motion_dev_ws
 source install/setup.bash
 
 # Terminal 1
@@ -328,7 +337,69 @@ uint8[] value
 
 ---
 
-## 6. Admittanzregelung
+## 6. Datenaufzeichnung
+
+### ROS2 Bag
+
+Alle Topics können als `.mcap`-Datei aufgezeichnet und später offline ausgewertet werden – ohne laufende Hardware.
+
+**Aufzeichnen:**
+```bash
+cd ~/rise-motion/rise_motion_dev_ws
+source install/setup.bash
+ros2 bag record /motor_feedback_full /motor_feedback
+# Stoppen mit Ctrl+C
+# Erstellt automatisch einen Ordner mit Zeitstempel, z.B. rosbag2_2026_03_27_12_00_00/
+```
+
+**Abspielen** (simuliert die Topics als wären sie live):
+```bash
+ros2 bag play rosbag2_2026_03_27_12_00_00/
+# In anderem Terminal: ros2 topic echo /motor_feedback_full
+```
+
+**Metadaten anzeigen:**
+```bash
+ros2 bag info rosbag2_2026_03_27_12_00_00/
+# Zeigt: Dauer, Anzahl Messages, Topics, Frequenzen
+```
+
+### Nützliche Diagnose-Tools
+
+**Publishrate messen:**
+```bash
+ros2 topic hz /motor_feedback_full   # sollte ~100 Hz zeigen (10ms Timer)
+```
+
+**Node-Graph anzeigen** (welche Nodes welche Topics nutzen):
+```bash
+ros2 run rqt_graph rqt_graph
+```
+
+**PlotJuggler** – GUI zum Plotten von Bag-Dateien und Live-Topics (empfohlen für Admittanz-Tuning):
+
+Installation (einmalig):
+```bash
+sudo apt install ros-jazzy-plotjuggler-ros
+```
+
+Starten (im selben Terminal wie `source install/setup.bash`, sonst werden Message-Typen nicht erkannt):
+```bash
+ros2 run plotjuggler plotjuggler
+```
+
+Live-Topics plotten:
+1. **Streaming** → `ROS2 Topic Subscriber` → **Start**
+2. Links in der Liste erscheinen alle aktiven Topics – z.B. `/motor_feedback_full` aufklappen
+3. Felder per Drag&Drop ins Plot-Fenster ziehen (z.B. `analog_input1[0]`)
+
+Bag-Datei auswerten:
+1. **File** → `Load Data` → Bag-Ordner auswählen
+2. Felder per Drag&Drop plotten
+
+---
+
+## 7. Admittanzregelung
 
 ### Regelungsgesetz
 ```
@@ -365,7 +436,7 @@ pos_target = pos_current + q
 
 ### Offene Punkte
 - Velocity-Commands an Servo: restlicher RISE-OS Stack arbeitet mit Positionscommands → Integration noch offen
-- Geplantes Topic `motor_feedback_full` mit `WrenchMsg` (Woche 2)
+- Kalibrierung Kraftsensor: ADC-Ticks → Newton → Nm (Woche 3)
 
 ### Safety (minimal)
 - `v_max`: maximale Gelenkgeschwindigkeit
@@ -374,7 +445,7 @@ pos_target = pos_current + q
 
 ---
 
-## 7. Entwicklungsplan
+## 8. Entwicklungsplan
 
 ### Woche 1 – Mock & Grundstruktur
 - [x] Mock `ECManager` (lokale Tests ohne Hardware)
@@ -382,16 +453,19 @@ pos_target = pos_current + q
 - [ ] Mathematik validieren (Plots)
 
 ### Woche 2 – Kraftsensor-Integration (Software)
-- [ ] `FeedbackData` Struct erweitern (AnalogInput1/2 aus CiA402 PDO)
-- [ ] ECManager: Analog Inputs in `feedback_apsa` durchleiten
-- [ ] Neue Message `WrenchMsg.msg` definieren
+- [x] `MotorFeedbackData` Struct (alle CiA402_Inputs Felder)
+- [x] Zweites APSA `full_feedback_apsa` in ECManager und MockECManager
+- [x] Neue Message `MotorFeedbackFull.msg` (alle PDO-Felder als parallele Arrays)
+- [x] Neues Topic `/motor_feedback_full` in EthercatNode
+- [x] Mock simuliert `analog_input1` als 1Hz-Sinus (ADC-Ticks, ±2.5V)
 
 ### Woche 3 – Hardware-Tests
 - [ ] Echten Kraftsensor testen (Linux-PC, Interface `enp1s0`)
-- [ ] Kalibrierung (ADC-Ticks → Newton → Nm)
+- [ ] Kalibrierung (ADC-Ticks → Newton → Nm, Offset)
 - [ ] Erste Admittanz-Tests am Exoskelett
 
 ### Woche 4+ – Integration & Tuning
+- [ ] `AdmittanzNode` implementieren (subscribed auf `/motor_feedback_full`)
 - [ ] Parameter M, D, K über ROS2 Parameter Server konfigurierbar
 - [ ] Integration in RISE-OS Stack (`motor_command_safe`)
 - [ ] Safety-Logik: v_max, pos_limits, Watchdog, Notaus
