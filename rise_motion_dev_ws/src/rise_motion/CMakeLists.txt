@@ -52,6 +52,18 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(admittance_node
+  src/admittance_node.cpp
+)
+target_link_libraries(admittance_node PUBLIC
+  ${rise_motion_messages_TARGETS}
+  rclcpp::rclcpp
+)
+install(TARGETS
+  admittance_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_executable(testing_node
   src/testing_node.cpp
 )
