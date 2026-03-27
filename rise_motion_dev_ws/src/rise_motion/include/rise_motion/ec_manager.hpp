@@ -25,6 +25,7 @@ public:
   // APSA-based motor value transfer (lock-free)
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values) override;
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values) override;
+  bool get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) override;
 
   // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
   bool sdo_read(uint16_t device_id, uint16_t index, uint8_t subindex, std::vector<uint8_t>& value) override;
@@ -52,6 +53,9 @@ private:
   // cmd_apsa: ROS → EtherCAT (motor commands)
   APSA<std::vector<int32_t>> cmd_apsa;
 
-  // feedback_apsa: EtherCAT → ROS (motor feedback)
+  // feedback_apsa: EtherCAT → ROS (motor positions only, für /motor_feedback)
   APSA<std::vector<int32_t>> feedback_apsa;
+
+  // full_feedback_apsa: EtherCAT → ROS (alle PDO-Felder, für /motor_feedback_full)
+  APSA<std::vector<MotorFeedbackData>> full_feedback_apsa;
 };

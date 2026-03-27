@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdlib>
 #include <thread>
 #include <rclcpp/logging.hpp>
@@ -39,6 +40,20 @@ void MockECManager::cyclic_loop() {
     // Publish feedback to ROS thread (wait-free)
     feedback_apsa_.perf_write(mock_positions_);
 
+    // Simulate full PDO feedback: analog_input1 = 1Hz sinus (±2.5V range)
+    // ADC range: 0=Umin(-5V), 65535=Umax(+5V), midpoint=32768(0V)
+    double t = tick_count_ * period_.count() * 1e-3;
+    uint16_t analog_sim = static_cast<uint16_t>(
+        32768.0 + 16384.0 * std::sin(2.0 * M_PI * 1.0 * t));
+
+    std::vector<MotorFeedbackData> full_feedback(num_motors_);
+    for (int i = 0; i < num_motors_; ++i) {
+      full_feedback[i].position      = mock_positions_[i];
+      full_feedback[i].analog_input1 = analog_sim;
+    }
+    full_feedback_apsa_.perf_write(full_feedback);
+
+    tick_count_++;
     std::this_thread::sleep_until(next_);
   }
 }
@@ -57,6 +72,10 @@ bool MockECManager::get_motor_values_apsa(std::vector<int32_t>& motor_values) {
 
 bool MockECManager::set_motor_values_apsa(const std::vector<int32_t>& motor_values) {
   return cmd_apsa_.comm_write(motor_values);
+}
+
+bool MockECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) {
+  return full_feedback_apsa_.comm_read(feedback);
 }
 
 bool MockECManager::sdo_read(uint16_t /*device_id*/, uint16_t /*index*/,

@@ -20,6 +20,7 @@ public:
 
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values) override;
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values) override;
+  bool get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) override;
 
   bool sdo_read(uint16_t device_id, uint16_t index,
                 uint8_t subindex, std::vector<uint8_t>& value) override;
@@ -34,10 +35,12 @@ private:
 
   std::vector<int32_t> mock_positions_;
   std::vector<int32_t> motor_commands_;
+  uint64_t tick_count_{0};
 
   std::chrono::time_point<std::chrono::steady_clock> next_;
   const std::chrono::duration<long, std::ratio<1, 1000>> period_;
 
   APSA<std::vector<int32_t>> cmd_apsa_;
   APSA<std::vector<int32_t>> feedback_apsa_;
+  APSA<std::vector<MotorFeedbackData>> full_feedback_apsa_;
 };

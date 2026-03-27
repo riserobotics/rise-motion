@@ -21,6 +21,14 @@ EthercatNode::EthercatNode(IECManager &ec_manager)
       create_wall_timer(std::chrono::milliseconds(10),
 			std::bind(&EthercatNode::publishFeedback, this));
 
+  full_feedback_pub_ =
+      create_publisher<rise_motion_messages::msg::MotorFeedbackFull>(
+          "motor_feedback_full", 10);
+
+  full_feedback_timer_ =
+      create_wall_timer(std::chrono::milliseconds(10),
+                        std::bind(&EthercatNode::publishFullFeedback, this));
+
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
       "enable_ethercat",
       std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
@@ -133,6 +141,33 @@ void EthercatNode::sdoReadServiceCallback(
   response->value	= value;
   response->value_type	= 0;
 }
+void EthercatNode::publishFullFeedback() {
+  std::vector<MotorFeedbackData> feedback;
+
+  if (ethercat_enabled_ && ec_manager_.get_full_feedback_apsa(feedback)) {
+    auto msg = rise_motion_messages::msg::MotorFeedbackFull();
+    for (const auto& f : feedback) {
+      msg.statusword.push_back(f.statusword);
+      msg.op_mode_display.push_back(f.op_mode_display);
+      msg.positions.push_back(f.position);
+      msg.velocity_value.push_back(f.velocity_value);
+      msg.torque_value.push_back(f.torque_value);
+      msg.analog_input1.push_back(f.analog_input1);
+      msg.analog_input2.push_back(f.analog_input2);
+      msg.analog_input3.push_back(f.analog_input3);
+      msg.analog_input4.push_back(f.analog_input4);
+      msg.tuning_status.push_back(f.tuning_status);
+      msg.digital_inputs.push_back(f.digital_inputs);
+      msg.user_miso.push_back(f.user_miso);
+      msg.timestamp.push_back(f.timestamp);
+      msg.position_demand_internal_value.push_back(f.position_demand_internal_value);
+      msg.velocity_demand_value.push_back(f.velocity_demand_value);
+      msg.torque_demand.push_back(f.torque_demand);
+    }
+    full_feedback_pub_->publish(msg);
+  }
+}
+
 void EthercatNode::sdoWriteServiceCallback(
     const std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Request>
 	request,

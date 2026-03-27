@@ -104,6 +104,7 @@ void ECManager::cyclic_loop() {
 
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
+  std::vector<MotorFeedbackData> full_feedback(ctx.slavecount);
 
   // Transition to OPERATIONAL
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
@@ -172,6 +173,23 @@ void ECManager::cyclic_loop() {
       m.outputs->TargetPosition = motor_commands[i];
       motor_feedback[i] = m.inputs->PositionValue;
 
+      full_feedback[i].statusword                     = m.inputs->Statusword;
+      full_feedback[i].op_mode_display                = m.inputs->OpModeDisplay;
+      full_feedback[i].position                       = m.inputs->PositionValue;
+      full_feedback[i].velocity_value                 = m.inputs->VelocityValue;
+      full_feedback[i].torque_value                   = m.inputs->TorqueValue;
+      full_feedback[i].analog_input1                  = m.inputs->AnalogInput1;
+      full_feedback[i].analog_input2                  = m.inputs->AnalogInput2;
+      full_feedback[i].analog_input3                  = m.inputs->AnalogInput3;
+      full_feedback[i].analog_input4                  = m.inputs->AnalogInput4;
+      full_feedback[i].tuning_status                  = m.inputs->TuningStatus;
+      full_feedback[i].digital_inputs                 = m.inputs->DigitalInputs;
+      full_feedback[i].user_miso                      = m.inputs->UserMISO;
+      full_feedback[i].timestamp                      = m.inputs->Timestamp;
+      full_feedback[i].position_demand_internal_value = m.inputs->PositionDemandInternalValue;
+      full_feedback[i].velocity_demand_value          = m.inputs->VelocityDemandValue;
+      full_feedback[i].torque_demand                  = m.inputs->TorqueDemand;
+
       RCLCPP_DEBUG(logger,
                    "Motor Outputs:\n"
                    "\tControlword: 0x%04X\n"
@@ -221,6 +239,7 @@ void ECManager::cyclic_loop() {
 
     // Make feedback available to ROS publisher (wait-free)
     feedback_apsa.perf_write(motor_feedback);
+    full_feedback_apsa.perf_write(full_feedback);
 
     // Sleep until next cycle (maintains 1kHz frequency)
     std::this_thread::sleep_until(next);
@@ -258,6 +277,10 @@ bool ECManager::set_motor_values_apsa(
     const std::vector<int32_t> &motor_values) {
   // comm_write() queues the data for the EtherCAT loop to pick up
   return cmd_apsa.comm_write(motor_values);
+}
+
+bool ECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData> &feedback) {
+  return full_feedback_apsa.comm_read(feedback);
 }
 
 uint16 ECManager::transition_ec(uint16 state) {
