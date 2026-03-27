@@ -4,8 +4,8 @@
 # Force sensor calibration chain
 float64[] adc_voltage       # [V]  ADC ticks -> voltage
 float64[] force             # [N]  voltage -> force
-float64[] torque_raw        # [Nm] force * lever_arm (before clipping)
-float64[] torque_clipped    # [Nm] after tau_max clipping
+float64[] force_clipped     # [N]  after f_max clipping
+float64[] torque_raw        # [Nm] force_clipped * lever_arm
 
 # Admittance integration
 float64[] vdot              # [enc-inc/s^2] acceleration

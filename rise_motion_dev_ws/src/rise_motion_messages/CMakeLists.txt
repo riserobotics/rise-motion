@@ -15,6 +15,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotorPositions.msg"
   "msg/MotorFeedbackFull.msg"
   "msg/AdmittanceDebug.msg"
+  "msg/MotorVelocity.msg"
   "srv/EnableEthercatSrv.srv"
   "srv/SDOReadSrv.srv"
   "srv/SDOWriteSrv.srv"

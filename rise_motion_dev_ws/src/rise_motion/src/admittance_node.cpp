@@ -1,17 +1,18 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <limits>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion_messages/msg/admittance_debug.hpp>
 #include <rise_motion_messages/msg/motor_feedback_full.hpp>
-#include <rise_motion_messages/msg/motor_positions.hpp>
+#include <rise_motion_messages/msg/motor_velocity.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
 
 // AdmittanzNode: Implements admittance control law
 //
 // Input:  τ_int (interaction torque via load cell, from analog_input1)
-// Output: velocity commands on /motor_commands_vel (MotorPositions as container)
+// Output: velocity commands on /motor_commands_vel (MotorVelocity)
 //
 // Control law (transparent mode, K_v = 0):
 //   M_v * v̇ + D_v * v = τ_int
@@ -19,9 +20,15 @@
 //     v̇  = (τ_int - D_v * v) / M_v
 //     v  += v̇ * dt
 //
+// Force sensor calibration (ADC 0..65535, 0V..5V, 2.5V = 0N):
+//   V = (adc / 65535.0 * 5.0) - 2.5   [V]
+//   F = V * sensitivity_inv             [N]
+//   F = clamp(F, -f_max, f_max)         [N] - sensor range limit
+//   τ = F * lever_arm                   [Nm]
+//
 // NOTE: Currently publishes to /motor_commands_vel (not wired to motor).
 // Wiring to actual motor commands requires enabling CyclicSyncVelocityMode
-// on the drive first (TODO Woche 3/4).
+// on the drive first (TODO Woche 4).
 
 class AdmittanzNode : public rclcpp::Node {
 public:
@@ -32,17 +39,21 @@ public:
     declare_parameter("K_v", 0.0);
 
     // Force sensor calibration: ADC → Voltage → Force → Torque
-    // V    = (adc - offset) / 65536.0 * 10.0   (10V range: -5V..+5V)
-    // F    = V * sensitivity_inv                 [N]
-    // τ    = F * lever_arm                       [Nm]
-    declare_parameter("offset", 32768.0);          // ADC ticks at 0V
+    // ADC range: 0..65535 → 0V..5V, midpoint 32767.5 = 2.5V = 0N
     declare_parameter("sensitivity_inv", 100.0);   // N/V (placeholder, calibrate Woche 3)
     declare_parameter("lever_arm", 0.1);           // m   (placeholder)
 
     // Safety limits
-    declare_parameter("tau_max", 50.0);    // Nm  - input clipping
+    declare_parameter("f_max", 500.0);     // N    - input clipping (sensor range)
     declare_parameter("vel_max", 1000.0);  // inc/s - output clipping
     declare_parameter("dvel_max", 500.0);  // inc/s per step - jerk limit
+
+    // Position limits (enc-inc): motor stops if position exceeds these bounds
+    // Defaults: no effect (full int32 range)
+    declare_parameter("pos_min",
+                      static_cast<int64_t>(std::numeric_limits<int32_t>::min()));
+    declare_parameter("pos_max",
+                      static_cast<int64_t>(std::numeric_limits<int32_t>::max()));
 
     feedback_sub_ =
         create_subscription<rise_motion_messages::msg::MotorFeedbackFull>(
@@ -51,7 +62,7 @@ public:
               feedbackCallback(msg);
             });
 
-    cmd_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
+    cmd_pub_ = create_publisher<rise_motion_messages::msg::MotorVelocity>(
         "motor_commands_vel", 10);
 
     debug_pub_ = create_publisher<rise_motion_messages::msg::AdmittanceDebug>(
@@ -95,7 +106,7 @@ public:
 private:
   rclcpp::Subscription<rise_motion_messages::msg::MotorFeedbackFull>::SharedPtr
       feedback_sub_;
-  rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr
+  rclcpp::Publisher<rise_motion_messages::msg::MotorVelocity>::SharedPtr
       cmd_pub_;
   rclcpp::Publisher<rise_motion_messages::msg::AdmittanceDebug>::SharedPtr
       debug_pub_;
@@ -119,7 +130,7 @@ private:
       pos_current_.resize(n, 0);
       velocity_.resize(n, 0.0);
       displacement_.resize(n, 0.0);
-      analog_input1_.resize(n, 32768);  // init to 0V (midpoint)
+      analog_input1_.resize(n, 32768);  // init to midpoint (0N)
       has_feedback_ = true;
       RCLCPP_INFO(get_logger(), "Got first feedback (%zu motors)", n);
     }
@@ -131,25 +142,26 @@ private:
     if (!has_feedback_) return;
 
     // Read parameters every cycle (allows live tuning via ros2 param set)
-    const double M_v            = get_parameter("M_v").as_double();
-    const double D_v            = get_parameter("D_v").as_double();
-    const double K_v            = get_parameter("K_v").as_double();
-    const double offset         = get_parameter("offset").as_double();
+    const double M_v             = get_parameter("M_v").as_double();
+    const double D_v             = get_parameter("D_v").as_double();
+    const double K_v             = get_parameter("K_v").as_double();
     const double sensitivity_inv = get_parameter("sensitivity_inv").as_double();
-    const double lever_arm      = get_parameter("lever_arm").as_double();
-    const double tau_max        = get_parameter("tau_max").as_double();
-    const double vel_max        = get_parameter("vel_max").as_double();
-    const double dvel_max       = get_parameter("dvel_max").as_double();
+    const double lever_arm       = get_parameter("lever_arm").as_double();
+    const double f_max           = get_parameter("f_max").as_double();
+    const double vel_max         = get_parameter("vel_max").as_double();
+    const double dvel_max        = get_parameter("dvel_max").as_double();
+    const auto   pos_min         = static_cast<int32_t>(get_parameter("pos_min").as_int());
+    const auto   pos_max         = static_cast<int32_t>(get_parameter("pos_max").as_int());
 
     const size_t n = pos_current_.size();
-    auto msg = rise_motion_messages::msg::MotorPositions();
-    msg.positions.resize(n);
+    auto msg = rise_motion_messages::msg::MotorVelocity();
+    msg.velocities.resize(n);
 
     auto dbg = rise_motion_messages::msg::AdmittanceDebug();
     dbg.adc_voltage.resize(n);
     dbg.force.resize(n);
+    dbg.force_clipped.resize(n);
     dbg.torque_raw.resize(n);
-    dbg.torque_clipped.resize(n);
     dbg.vdot.resize(n);
     dbg.velocity_raw.resize(n);
     dbg.velocity_output.resize(n);
@@ -157,10 +169,11 @@ private:
 
     for (size_t i = 0; i < n; ++i) {
       // ADC → Voltage → Force → Torque
-      double V        = (static_cast<double>(analog_input1_[i]) - offset) / 65536.0 * 10.0;
-      double F        = V * sensitivity_inv;
-      double tau_raw  = F * lever_arm;
-      double tau      = std::clamp(tau_raw, -tau_max, tau_max);
+      // ADC: 0..65535 → 0V..5V, 2.5V = 0N (bipolar sensor)
+      double V     = (static_cast<double>(analog_input1_[i]) / 65535.0 * 5.0) - 2.5;
+      double F_raw = V * sensitivity_inv;
+      double F     = std::clamp(F_raw, -f_max, f_max);  // sensor range limit [N]
+      double tau   = F * lever_arm;                       // [Nm]
 
       // Admittance Euler integration
       double vdot   = (tau - D_v * velocity_[i] - K_v * displacement_[i]) / M_v;
@@ -169,21 +182,27 @@ private:
       displacement_[i] += velocity_[i] * dt_;
 
       // Output: jerk limit then velocity clamp
-      double v_after_jerk = std::clamp(velocity_[i],
-                                        v_prev - dvel_max * dt_,
-                                        v_prev + dvel_max * dt_);
-      velocity_[i] = std::clamp(v_after_jerk, -vel_max, vel_max);
+      velocity_[i] = std::clamp(velocity_[i],
+                                 v_prev - dvel_max * dt_,
+                                 v_prev + dvel_max * dt_);
+      velocity_[i] = std::clamp(velocity_[i], -vel_max, vel_max);
 
-      msg.positions[i] = static_cast<int32_t>(velocity_[i]);
+      // Position limits: stop motion toward a breached limit
+      if ((pos_current_[i] <= pos_min && velocity_[i] < 0.0) ||
+          (pos_current_[i] >= pos_max && velocity_[i] > 0.0)) {
+        velocity_[i] = 0.0;
+      }
 
-      dbg.adc_voltage[i]    = V;
-      dbg.force[i]          = F;
-      dbg.torque_raw[i]     = tau_raw;
-      dbg.torque_clipped[i] = tau;
-      dbg.vdot[i]           = vdot;
-      dbg.velocity_raw[i]   = v_prev + vdot * dt_;
+      msg.velocities[i] = static_cast<int32_t>(velocity_[i]);
+
+      dbg.adc_voltage[i]   = V;
+      dbg.force[i]         = F_raw;
+      dbg.force_clipped[i] = F;
+      dbg.torque_raw[i]    = tau;
+      dbg.vdot[i]          = vdot;
+      dbg.velocity_raw[i]  = v_prev + vdot * dt_;
       dbg.velocity_output[i] = velocity_[i];
-      dbg.displacement[i]   = displacement_[i];
+      dbg.displacement[i]  = displacement_[i];
     }
 
     cmd_pub_->publish(msg);
