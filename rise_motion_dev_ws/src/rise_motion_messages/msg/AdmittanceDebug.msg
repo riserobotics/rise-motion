@@ -1,5 +1,7 @@
 # Per-motor debug data for admittance controller
 # Arrays are indexed by motor number
+std_msgs/Header header  # ROS timestamp when debug data was computed
+
 
 # Force sensor calibration chain
 float64[] adc_voltage       # [V]      ADC ticks -> voltage (centered: 0V = no force)

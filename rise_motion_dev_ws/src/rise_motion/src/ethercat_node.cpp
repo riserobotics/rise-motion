@@ -146,6 +146,7 @@ void EthercatNode::publishFullFeedback() {
 
   if (ethercat_enabled_ && ec_manager_.get_full_feedback_apsa(feedback)) {
     auto msg = rise_motion_messages::msg::MotorFeedbackFull();
+    msg.header.stamp = now();
     for (const auto& f : feedback) {
       msg.statusword.push_back(f.statusword);
       msg.op_mode_display.push_back(f.op_mode_display);

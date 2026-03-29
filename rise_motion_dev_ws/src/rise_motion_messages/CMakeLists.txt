@@ -8,6 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/StateCurrentMsg.msg"
@@ -19,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/EnableEthercatSrv.srv"
   "srv/SDOReadSrv.srv"
   "srv/SDOWriteSrv.srv"
+  DEPENDENCIES std_msgs
  )
 
 if(BUILD_TESTING)

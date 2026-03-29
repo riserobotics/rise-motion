@@ -150,17 +150,25 @@ private:
 
   void feedbackCallback(
       rise_motion_messages::msg::MotorFeedbackFull::SharedPtr msg) {
+    const size_t n = msg->positions.size();
     if (!has_feedback_) {
-      size_t n = msg->positions.size();
       pos_current_.resize(n, 0);
       velocity_.resize(n, 0.0);
       displacement_.resize(n, 0.0);
       analog_input1_.resize(n, 32768);  // init to midpoint (0N)
       has_feedback_ = true;
       RCLCPP_INFO(get_logger(), "Got first feedback (%zu motors)", n);
+    } else if (n != pos_current_.size()) {
+      // Motor count changed (e.g. EtherCAT reconnect) — reinitialize state
+      RCLCPP_WARN(get_logger(), "Feedback size changed %zu → %zu, reinitializing state",
+                  pos_current_.size(), n);
+      pos_current_.assign(n, 0);
+      velocity_.assign(n, 0.0);
+      displacement_.assign(n, 0.0);
+      analog_input1_.assign(n, 32768);
     }
-    pos_current_           = msg->positions;
-    analog_input1_         = msg->analog_input1;
+    pos_current_            = msg->positions;
+    analog_input1_          = msg->analog_input1;
     new_feedback_available_ = true;
   }
 
@@ -183,6 +191,11 @@ private:
 
     // Read parameters every cycle (allows live tuning via ros2 param set)
     const double M_v             = get_parameter("M_v").as_double();
+    if (M_v <= 0.0) {
+      RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 1000,
+                            "Invalid M_v=%.4f (must be > 0), skipping cycle", M_v);
+      return;
+    }
     const double D_v             = get_parameter("D_v").as_double();
     const double K_v             = get_parameter("K_v").as_double();
     const double sensitivity_inv = get_parameter("sensitivity_inv").as_double();
@@ -196,11 +209,13 @@ private:
 
     const size_t n = pos_current_.size();
     auto msg = rise_motion_messages::msg::MotorVelocity();
+    msg.header.stamp = now();
     msg.velocities.resize(n);
 
     constexpr double rad_to_deg = 180.0 / M_PI;
 
     auto dbg = rise_motion_messages::msg::AdmittanceDebug();
+    dbg.header.stamp = now();
     dbg.adc_voltage.resize(n);
     dbg.force.resize(n);
     dbg.force_clipped.resize(n);
@@ -267,7 +282,11 @@ private:
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<AdmittanzNode>();
-  while (!node->request_enable_ethercat()) {
+  while (rclcpp::ok() && !node->request_enable_ethercat()) {
+  }
+  if (!rclcpp::ok()) {
+    rclcpp::shutdown();
+    return 1;
   }
   rclcpp::spin(node);
   rclcpp::shutdown();
