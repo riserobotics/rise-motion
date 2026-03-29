@@ -68,6 +68,14 @@ public:
     declare_parameter("pos_max",
                       static_cast<int64_t>(std::numeric_limits<int32_t>::max()));
 
+    // Control loop timing
+    // compute_period_ms defines the timer rate (independent of feedback publish rate).
+    // dt clamps guard against jitter (dtmin) and missed feedback packets (dtmax).
+    // dtmax=20ms covers one missed 10ms feedback packet.
+    declare_parameter("compute_period_ms", 1);   // [ms]  timer period; 1ms = 1kHz
+    declare_parameter("dt_min_ms", 0.5);         // [ms]  ignore spuriously short steps
+    declare_parameter("dt_max_ms", 20.0);        // [ms]  clamp missed-packet steps
+
     feedback_sub_ =
         create_subscription<rise_motion_messages::msg::MotorFeedbackFull>(
             "motor_feedback_full", 10,
@@ -81,8 +89,9 @@ public:
     debug_pub_ = create_publisher<rise_motion_messages::msg::AdmittanceDebug>(
         "admittance_debug", 10);
 
+    const int period_ms = get_parameter("compute_period_ms").as_int();
     compute_timer_ = create_wall_timer(
-        std::chrono::milliseconds(1),
+        std::chrono::milliseconds(period_ms),
         std::bind(&AdmittanzNode::computeAdmittance, this));
 
     client_ = create_client<rise_motion_messages::srv::EnableEthercatSrv>(
@@ -133,13 +142,11 @@ private:
   std::vector<double>   displacement_; // [rad]
   std::vector<uint16_t> analog_input1_;
   bool has_feedback_{false};
+  bool new_feedback_available_{false};  // true after each feedbackCallback, cleared by computeAdmittance
 
-  // Timing: measure actual dt each cycle instead of assuming 1ms
-  // WSL2 timer jitter can cause dt to vary between 0.5ms and 13ms
+  // Timing: measure actual dt each cycle instead of assuming fixed period
   std::chrono::steady_clock::time_point last_compute_time_;
   bool first_compute_{true};
-  static constexpr double dtmin_ = 0.0005;  // 0.5ms  - ignore spuriously short steps
-  static constexpr double dtmax_ = 0.005;   // 5ms    - clamp runaway steps
 
   void feedbackCallback(
       rise_motion_messages::msg::MotorFeedbackFull::SharedPtr msg) {
@@ -152,14 +159,16 @@ private:
       has_feedback_ = true;
       RCLCPP_INFO(get_logger(), "Got first feedback (%zu motors)", n);
     }
-    pos_current_  = msg->positions;
-    analog_input1_ = msg->analog_input1;
+    pos_current_           = msg->positions;
+    analog_input1_         = msg->analog_input1;
+    new_feedback_available_ = true;
   }
 
   void computeAdmittance() {
-    if (!has_feedback_) return;
+    if (!has_feedback_ || !new_feedback_available_) return;
+    new_feedback_available_ = false;
 
-    // Measure actual dt since last call
+    // Measure actual dt since last compute
     auto now = std::chrono::steady_clock::now();
     if (first_compute_) {
       last_compute_time_ = now;
@@ -168,7 +177,9 @@ private:
     }
     double dt = std::chrono::duration<double>(now - last_compute_time_).count();
     last_compute_time_ = now;
-    dt = std::clamp(dt, dtmin_, dtmax_);
+    const double dtmin = get_parameter("dt_min_ms").as_double() * 1e-3;
+    const double dtmax = get_parameter("dt_max_ms").as_double() * 1e-3;
+    dt = std::clamp(dt, dtmin, dtmax);
 
     // Read parameters every cycle (allows live tuning via ros2 param set)
     const double M_v             = get_parameter("M_v").as_double();
