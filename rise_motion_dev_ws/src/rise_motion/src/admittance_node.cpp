@@ -12,13 +12,17 @@
 // AdmittanzNode: Implements admittance control law
 //
 // Input:  τ_int (interaction torque via load cell, from analog_input1)
-// Output: velocity commands on /motor_commands_vel (MotorVelocity)
+// Output: velocity commands on /motor_commands_vel (MotorVelocity, enc-inc/s)
 //
 // Control law (transparent mode, K_v = 0):
 //   M_v * v̇ + D_v * v = τ_int
 //   Euler, dt = 1ms:
-//     v̇  = (τ_int - D_v * v) / M_v
-//     v  += v̇ * dt
+//     v̇  = (τ_int - D_v * v) / M_v     [rad/s^2]
+//     v  += v̇ * dt                      [rad/s]
+//     q  += v  * dt                      [rad]
+//
+// All internal state is in physical units (rad, rad/s, rad/s^2).
+// Conversion to enc-inc/s happens only on publish via enc_per_rad.
 //
 // Force sensor calibration (ADC 0..65535, 0V..5V, 2.5V = 0N):
 //   V = (adc / 65535.0 * 5.0) - 2.5   [V]
@@ -33,22 +37,31 @@
 class AdmittanzNode : public rclcpp::Node {
 public:
   AdmittanzNode() : Node("admittanz_node") {
-    // Admittance parameters
-    declare_parameter("M_v", 1.0);
-    declare_parameter("D_v", 10.0);
-    declare_parameter("K_v", 0.0);
+    // Admittance parameters (SI units)
+    // M_v: virtual inertia  – higher = slower response, more "mass-like" feel
+    // D_v: virtual damping  – higher = smaller velocity at same torque, more resistance
+    //                         steady-state: v_eq = tau / D_v
+    // K_v: virtual stiffness – 0 for transparent mode, >0 adds restoring force to neutral
+    declare_parameter("M_v", 3.0);    // [kg*m^2]   realistic knee joint inertia: 0.3..0.8
+    declare_parameter("D_v", 10.0);    // [Nm*s/rad] v_eq = 25Nm / 5.0 = 5 rad/s (286 deg/s)
+    declare_parameter("K_v", 0.0);    // [Nm/rad]   0 = transparent mode
 
     // Force sensor calibration: ADC → Voltage → Force → Torque
-    // ADC range: 0..65535 → 0V..5V, midpoint 32767.5 = 2.5V = 0N
-    declare_parameter("sensitivity_inv", 100.0);   // N/V (placeholder, calibrate Woche 3)
-    declare_parameter("lever_arm", 0.1);           // m   (placeholder)
+    // ADC range: 0..65535 → 0V..5V, midpoint 2.5V = 0N
+    declare_parameter("sensitivity_inv", 10.0);  // [N/V]  placeholder, calibrate Woche 3
+    declare_parameter("lever_arm", 0.1);          // [m]    placeholder
 
-    // Safety limits
-    declare_parameter("f_max", 500.0);     // N    - input clipping (sensor range)
-    declare_parameter("vel_max", 1000.0);  // inc/s - output clipping
-    declare_parameter("dvel_max", 500.0);  // inc/s per step - jerk limit
+    // Safety limits (SI units)
+    declare_parameter("f_max", 200.0);   // [N]       typical cuff load cell range
+    declare_parameter("vel_max", 3.0);   // [rad/s]   ~172 deg/s, reasonable for transparent mode
+    declare_parameter("dvel_max", 10.0); // [rad/s^2] gentle jerk limit, avoids abrupt steps
 
-    // Position limits (enc-inc): motor stops if position exceeds these bounds
+    // Encoder conversion: enc-inc per radian (motor-specific, depends on resolution + gear ratio)
+    // enc_per_rad = ENCODER_RESOLUTION * GEAR_RATIO / (2*pi)
+    // Default: Hüfte AA (2560 * 160 / 2pi ≈ 65306)
+    declare_parameter("enc_per_rad", 65306.0);
+
+    // Position limits (enc-inc, kept in motor units since pos_current_ comes from PDO)
     // Defaults: no effect (full int32 range)
     declare_parameter("pos_min",
                       static_cast<int64_t>(std::numeric_limits<int32_t>::min()));
@@ -114,14 +127,19 @@ private:
       client_;
   rclcpp::TimerBase::SharedPtr compute_timer_;
 
-  // State per motor
+  // State per motor (all in physical units: rad/s, rad)
   std::vector<int32_t>  pos_current_;
-  std::vector<double>   velocity_;
-  std::vector<double>   displacement_;
+  std::vector<double>   velocity_;     // [rad/s]
+  std::vector<double>   displacement_; // [rad]
   std::vector<uint16_t> analog_input1_;
   bool has_feedback_{false};
 
-  static constexpr double dt_ = 0.001;  // 1ms
+  // Timing: measure actual dt each cycle instead of assuming 1ms
+  // WSL2 timer jitter can cause dt to vary between 0.5ms and 13ms
+  std::chrono::steady_clock::time_point last_compute_time_;
+  bool first_compute_{true};
+  static constexpr double dtmin_ = 0.0005;  // 0.5ms  - ignore spuriously short steps
+  static constexpr double dtmax_ = 0.005;   // 5ms    - clamp runaway steps
 
   void feedbackCallback(
       rise_motion_messages::msg::MotorFeedbackFull::SharedPtr msg) {
@@ -141,6 +159,17 @@ private:
   void computeAdmittance() {
     if (!has_feedback_) return;
 
+    // Measure actual dt since last call
+    auto now = std::chrono::steady_clock::now();
+    if (first_compute_) {
+      last_compute_time_ = now;
+      first_compute_ = false;
+      return;
+    }
+    double dt = std::chrono::duration<double>(now - last_compute_time_).count();
+    last_compute_time_ = now;
+    dt = std::clamp(dt, dtmin_, dtmax_);
+
     // Read parameters every cycle (allows live tuning via ros2 param set)
     const double M_v             = get_parameter("M_v").as_double();
     const double D_v             = get_parameter("D_v").as_double();
@@ -150,12 +179,15 @@ private:
     const double f_max           = get_parameter("f_max").as_double();
     const double vel_max         = get_parameter("vel_max").as_double();
     const double dvel_max        = get_parameter("dvel_max").as_double();
+    const double enc_per_rad     = get_parameter("enc_per_rad").as_double();
     const auto   pos_min         = static_cast<int32_t>(get_parameter("pos_min").as_int());
     const auto   pos_max         = static_cast<int32_t>(get_parameter("pos_max").as_int());
 
     const size_t n = pos_current_.size();
     auto msg = rise_motion_messages::msg::MotorVelocity();
     msg.velocities.resize(n);
+
+    constexpr double rad_to_deg = 180.0 / M_PI;
 
     auto dbg = rise_motion_messages::msg::AdmittanceDebug();
     dbg.adc_voltage.resize(n);
@@ -166,43 +198,54 @@ private:
     dbg.velocity_raw.resize(n);
     dbg.velocity_output.resize(n);
     dbg.displacement.resize(n);
+    dbg.vdot_deg.resize(n);
+    dbg.velocity_raw_deg.resize(n);
+    dbg.velocity_output_deg.resize(n);
+    dbg.displacement_deg.resize(n);
 
     for (size_t i = 0; i < n; ++i) {
       // ADC → Voltage → Force → Torque
-      // ADC: 0..65535 → 0V..5V, 2.5V = 0N (bipolar sensor)
+      // ADC: 0..65535 → 0V..5V, midpoint 2.5V = 0N (bipolar sensor)
+      // Subtract 2.5V so that V=0 means no force. Without this, the controller
+      // would see F=250N at rest and drive the motor even with no interaction.
       double V     = (static_cast<double>(analog_input1_[i]) / 65535.0 * 5.0) - 2.5;
       double F_raw = V * sensitivity_inv;
       double F     = std::clamp(F_raw, -f_max, f_max);  // sensor range limit [N]
       double tau   = F * lever_arm;                       // [Nm]
 
-      // Admittance Euler integration
+      // Admittance Euler integration (all in rad/s, rad)
       double vdot   = (tau - D_v * velocity_[i] - K_v * displacement_[i]) / M_v;
       double v_prev = velocity_[i];
-      velocity_[i] += vdot * dt_;
-      displacement_[i] += velocity_[i] * dt_;
+      velocity_[i] += vdot * dt;
+      displacement_[i] += velocity_[i] * dt;
 
-      // Output: jerk limit then velocity clamp
+      // Output safety: jerk limit then velocity clamp
       velocity_[i] = std::clamp(velocity_[i],
-                                 v_prev - dvel_max * dt_,
-                                 v_prev + dvel_max * dt_);
+                                 v_prev - dvel_max * dt,
+                                 v_prev + dvel_max * dt);
       velocity_[i] = std::clamp(velocity_[i], -vel_max, vel_max);
 
-      // Position limits: stop motion toward a breached limit
+      // Position limits (enc-inc): stop motion toward a breached limit
       if ((pos_current_[i] <= pos_min && velocity_[i] < 0.0) ||
           (pos_current_[i] >= pos_max && velocity_[i] > 0.0)) {
         velocity_[i] = 0.0;
       }
 
-      msg.velocities[i] = static_cast<int32_t>(velocity_[i]);
+      // Convert rad/s → enc-inc/s for motor command
+      msg.velocities[i] = static_cast<int32_t>(velocity_[i] * enc_per_rad);
 
-      dbg.adc_voltage[i]   = V;
-      dbg.force[i]         = F_raw;
-      dbg.force_clipped[i] = F;
-      dbg.torque_raw[i]    = tau;
-      dbg.vdot[i]          = vdot;
-      dbg.velocity_raw[i]  = v_prev + vdot * dt_;
-      dbg.velocity_output[i] = velocity_[i];
-      dbg.displacement[i]  = displacement_[i];
+      dbg.adc_voltage[i]         = V;
+      dbg.force[i]               = F_raw;
+      dbg.force_clipped[i]       = F;
+      dbg.torque_raw[i]          = tau;
+      dbg.vdot[i]                = vdot;
+      dbg.velocity_raw[i]        = v_prev + vdot * dt;
+      dbg.velocity_output[i]     = velocity_[i];
+      dbg.displacement[i]        = displacement_[i];
+      dbg.vdot_deg[i]            = vdot              * rad_to_deg;
+      dbg.velocity_raw_deg[i]    = (v_prev + vdot * dt) * rad_to_deg;
+      dbg.velocity_output_deg[i] = velocity_[i]      * rad_to_deg;
+      dbg.displacement_deg[i]    = displacement_[i]  * rad_to_deg;
     }
 
     cmd_pub_->publish(msg);
