@@ -21,6 +21,8 @@ public:
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values) override;
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values) override;
   bool get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) override;
+  bool set_motor_velocity_apsa(const std::vector<int32_t>& velocities) override;
+  void set_operation_mode(int8_t mode) override;
 
   bool sdo_read(uint16_t device_id, uint16_t index,
                 uint8_t subindex, std::vector<uint8_t>& value) override;

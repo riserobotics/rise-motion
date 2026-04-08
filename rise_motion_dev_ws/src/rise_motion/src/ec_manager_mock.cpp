@@ -78,6 +78,14 @@ bool MockECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedb
   return full_feedback_apsa_.comm_read(feedback);
 }
 
+bool MockECManager::set_motor_velocity_apsa(const std::vector<int32_t>& /*velocities*/) {
+  return true;
+}
+
+void MockECManager::set_operation_mode(int8_t mode) {
+  RCLCPP_INFO(logger_, "Mock: operation mode set to %d", mode);
+}
+
 bool MockECManager::sdo_read(uint16_t /*device_id*/, uint16_t /*index*/,
                               uint8_t /*subindex*/, std::vector<uint8_t>& value) {
   value = {0};

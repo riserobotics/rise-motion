@@ -26,6 +26,8 @@ public:
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values) override;
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values) override;
   bool get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) override;
+  bool set_motor_velocity_apsa(const std::vector<int32_t>& velocities) override;
+  void set_operation_mode(int8_t mode) override;
 
   // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
   bool sdo_read(uint16_t device_id, uint16_t index, uint8_t subindex, std::vector<uint8_t>& value) override;
@@ -50,12 +52,19 @@ private:
   const std::chrono::duration<long, std::ratio<1,1000>> period; // period in ms
 
   // APSA instances for lock-free communication
-  // cmd_apsa: ROS → EtherCAT (motor commands)
+  // cmd_apsa: ROS → EtherCAT (position commands, Mode 8)
   APSA<std::vector<int32_t>> cmd_apsa;
+
+  // vel_cmd_apsa: ROS → EtherCAT (velocity commands, Mode 9)
+  APSA<std::vector<int32_t>> vel_cmd_apsa;
 
   // feedback_apsa: EtherCAT → ROS (motor positions only, für /motor_feedback)
   APSA<std::vector<int32_t>> feedback_apsa;
 
   // full_feedback_apsa: EtherCAT → ROS (alle PDO-Felder, für /motor_feedback_full)
   APSA<std::vector<MotorFeedbackData>> full_feedback_apsa;
+
+  // target_mode: 8 = CyclicSyncPositionMode (default), 9 = CyclicSyncVelocityMode
+  // Atomic: written by ROS thread (set_operation_mode), read by EtherCAT thread (cyclic_loop)
+  std::atomic<int8_t> target_mode_{8};
 };
