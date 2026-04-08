@@ -209,13 +209,13 @@ private:
 
     const size_t n = pos_current_.size();
     auto msg = rise_motion_messages::msg::MotorVelocity();
-    msg.header.stamp = now();
+    msg.header.stamp = get_clock()->now();
     msg.velocities.resize(n);
 
     constexpr double rad_to_deg = 180.0 / M_PI;
 
     auto dbg = rise_motion_messages::msg::AdmittanceDebug();
-    dbg.header.stamp = now();
+    dbg.header.stamp = get_clock()->now();
     dbg.adc_voltage.resize(n);
     dbg.force.resize(n);
     dbg.force_clipped.resize(n);
