@@ -9,6 +9,7 @@
 #include <rise_motion_messages/msg/motor_feedback_full.hpp>
 #include <rise_motion_messages/msg/motor_velocity.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
+#include <rise_motion_messages/srv/set_operation_mode_srv.hpp>
 #include <std_msgs/msg/u_int16.hpp>
 
 // AdmittanzNode: Implements admittance control law
@@ -111,6 +112,8 @@ public:
 
     client_ = create_client<rise_motion_messages::srv::EnableEthercatSrv>(
         "enable_ethercat");
+    mode_client_ = create_client<rise_motion_messages::srv::SetOperationModeSrv>(
+        "set_operation_mode");
 
     RCLCPP_INFO(get_logger(), "AdmittanzNode initialized (publishing to /motor_commands_vel)");
   }
@@ -140,6 +143,32 @@ public:
     return result_future.get()->status_enable;
   }
 
+  bool request_set_velocity_mode() {
+    while (!mode_client_->wait_for_service(std::chrono::seconds(1))) {
+      if (!rclcpp::ok()) {
+        RCLCPP_ERROR(get_logger(), "Interrupted waiting for set_operation_mode service.");
+        return false;
+      }
+      RCLCPP_INFO(get_logger(), "Waiting for set_operation_mode service...");
+    }
+    auto request = std::make_shared<rise_motion_messages::srv::SetOperationModeSrv::Request>();
+    request->mode = 9;
+    auto result_future = mode_client_->async_send_request(request);
+    if (rclcpp::spin_until_future_complete(shared_from_this(), result_future) !=
+        rclcpp::FutureReturnCode::SUCCESS) {
+      RCLCPP_ERROR(get_logger(), "set_operation_mode service call failed");
+      mode_client_->remove_pending_request(result_future);
+      return false;
+    }
+    auto result = result_future.get();
+    if (!result->success) {
+      RCLCPP_ERROR(get_logger(), "set_operation_mode rejected: %s", result->message.c_str());
+      return false;
+    }
+    RCLCPP_INFO(get_logger(), "Velocity mode (mode 9) active");
+    return true;
+  }
+
 private:
   rclcpp::Subscription<rise_motion_messages::msg::MotorFeedbackFull>::SharedPtr
       feedback_sub_;
@@ -151,6 +180,8 @@ private:
       debug_pub_;
   rclcpp::Client<rise_motion_messages::srv::EnableEthercatSrv>::SharedPtr
       client_;
+  rclcpp::Client<rise_motion_messages::srv::SetOperationModeSrv>::SharedPtr
+      mode_client_;
   rclcpp::TimerBase::SharedPtr compute_timer_;
 
   // State per motor (all in physical units: rad/s, rad)
@@ -305,6 +336,10 @@ int main(int argc, char **argv) {
   while (rclcpp::ok() && !node->request_enable_ethercat()) {
   }
   if (!rclcpp::ok()) {
+    rclcpp::shutdown();
+    return 1;
+  }
+  if (!node->request_set_velocity_mode()) {
     rclcpp::shutdown();
     return 1;
   }
