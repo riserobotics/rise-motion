@@ -165,9 +165,15 @@ void EthercatNode::setOperationModeCallback(
     response->message = "EtherCAT not enabled";
     return;
   }
+  if (request->mode != 8 && request->mode != 9) {
+    response->success = false;
+    response->message = "Invalid mode " + std::to_string(request->mode) + ". Only mode 8 (CyclicSyncPosition) and 9 (CyclicSyncVelocity) are supported.";
+    RCLCPP_WARN(get_logger(), "Rejected unsupported operation mode %d", request->mode);
+    return;
+  }
   ec_manager_.set_operation_mode(request->mode);
   response->success = true;
-  response->message = request->mode == 9 ? "Velocity mode active" : "Position mode active";
+  response->message = request->mode == 9 ? "Velocity mode active (mode 9)" : "Position mode active (mode 8)";
   RCLCPP_INFO(get_logger(), "Operation mode set to %d", request->mode);
 }
 
