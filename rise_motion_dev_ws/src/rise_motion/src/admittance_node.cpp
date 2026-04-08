@@ -9,7 +9,7 @@
 #include <rise_motion_messages/msg/motor_feedback_full.hpp>
 #include <rise_motion_messages/msg/motor_velocity.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
-#include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/u_int16.hpp>
 
 // AdmittanzNode: Implements admittance control law
 //
@@ -78,14 +78,17 @@ public:
     declare_parameter("dt_min_ms", 0.5);         // [ms]  ignore spuriously short steps
     declare_parameter("dt_max_ms", 20.0);        // [ms]  clamp missed-packet steps
 
-    // Fake sensor override: if true, /force_override topic (std_msgs/Float32, [N])
-    // replaces analog_input1 for all motors. Use for testing without a real load cell.
+    // Fake sensor override: if true, /analog_input_override topic (std_msgs/UInt16, ADC ticks 0..65535)
+    // replaces analog_input1 for all motors. Same format as the real sensor — full calibration pipeline active.
+    // 0 = 0V = -2.5V after offset = max negative force
+    // 32768 = 2.5V = 0N (neutral)
+    // 65535 = 5V = max positive force
     declare_parameter("use_force_override", false);
 
-    force_override_sub_ = create_subscription<std_msgs::msg::Float32>(
-        "force_override", 10,
-        [this](std_msgs::msg::Float32::SharedPtr msg) {
-          force_override_value_ = msg->data;
+    analog_override_sub_ = create_subscription<std_msgs::msg::UInt16>(
+        "analog_input_override", 10,
+        [this](std_msgs::msg::UInt16::SharedPtr msg) {
+          analog_override_value_ = msg->data;
         });
 
     feedback_sub_ =
@@ -140,8 +143,8 @@ public:
 private:
   rclcpp::Subscription<rise_motion_messages::msg::MotorFeedbackFull>::SharedPtr
       feedback_sub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr force_override_sub_;
-  std::atomic<float> force_override_value_{0.0f};
+  rclcpp::Subscription<std_msgs::msg::UInt16>::SharedPtr analog_override_sub_;
+  std::atomic<uint16_t> analog_override_value_{32768};  // default: 2.5V = 0N
   rclcpp::Publisher<rise_motion_messages::msg::MotorVelocity>::SharedPtr
       cmd_pub_;
   rclcpp::Publisher<rise_motion_messages::msg::AdmittanceDebug>::SharedPtr
@@ -248,15 +251,11 @@ private:
       // ADC: 0..65535 → 0V..5V, midpoint 2.5V = 0N (bipolar sensor)
       // Subtract 2.5V so that V=0 means no force. Without this, the controller
       // would see F=250N at rest and drive the motor even with no interaction.
-      double V;
-      double F_raw;
-      if (get_parameter("use_force_override").as_bool()) {
-        F_raw = static_cast<double>(force_override_value_.load());
-        V = F_raw / sensitivity_inv;  // back-calculate for debug display
-      } else {
-        V = (static_cast<double>(analog_input1_[i]) / 65535.0 * 5.0) - 2.5;
-        F_raw = V * sensitivity_inv;
-      }
+      const uint16_t adc = get_parameter("use_force_override").as_bool()
+                           ? analog_override_value_.load()
+                           : analog_input1_[i];
+      double V     = (static_cast<double>(adc) / 65535.0 * 5.0) - 2.5;
+      double F_raw = V * sensitivity_inv;
       double F   = std::clamp(F_raw, -f_max, f_max);  // sensor range limit [N]
       double tau = F * lever_arm;                       // [Nm]
 
