@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rise_motion_messages REQUIRED)
+find_package(std_msgs REQUIRED)
 
 include_directories(include)
 
@@ -57,6 +58,7 @@ add_executable(admittance_node
 )
 target_link_libraries(admittance_node PUBLIC
   ${rise_motion_messages_TARGETS}
+  ${std_msgs_TARGETS}
   rclcpp::rclcpp
 )
 install(TARGETS
