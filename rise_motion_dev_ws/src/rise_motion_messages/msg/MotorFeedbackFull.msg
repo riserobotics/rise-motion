@@ -1,4 +1,6 @@
 # All CiA402_Inputs PDO fields as parallel arrays, index = motor
+std_msgs/Header header  # ROS timestamp when message was published
+
 uint16[] statusword
 int8[]   op_mode_display
 int32[]  positions

@@ -103,6 +103,7 @@ void ECManager::cyclic_loop() {
   running_ = true;
 
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
+  std::vector<int32_t> motor_velocities(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
   std::vector<MotorFeedbackData> full_feedback(ctx.slavecount);
 
@@ -168,9 +169,23 @@ void ECManager::cyclic_loop() {
         return;
       }
 
-      // Try to get new data
+      // CiA402 Mode-Switching:
+      // 1. Write target mode every cycle; drive confirms via OpModeDisplay (1-10ms delay)
+      // 2. During transition (OpModeDisplay != target): hold position, zero velocity (safe)
+      // 3. Once confirmed: send commands for the active mode
       cmd_apsa.perf_read(motor_commands);
-      m.outputs->TargetPosition = motor_commands[i];
+      vel_cmd_apsa.perf_read(motor_velocities);
+      const int8_t target = target_mode_.load(std::memory_order_relaxed);
+      m.outputs->OpMode = target;
+      const bool mode_confirmed = (m.inputs->OpModeDisplay == target);
+      if (!mode_confirmed) {
+        m.outputs->TargetVelocity = 0;
+        m.outputs->TargetPosition = m.inputs->PositionValue;
+      } else if (target == 9) {  // CyclicSyncVelocityMode
+        m.outputs->TargetVelocity = motor_velocities[i];
+      } else {                   // CyclicSyncPositionMode (default)
+        m.outputs->TargetPosition = motor_commands[i];
+      }
       motor_feedback[i] = m.inputs->PositionValue;
 
       full_feedback[i].statusword                     = m.inputs->Statusword;
@@ -281,6 +296,15 @@ bool ECManager::set_motor_values_apsa(
 
 bool ECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData> &feedback) {
   return full_feedback_apsa.comm_read(feedback);
+}
+
+bool ECManager::set_motor_velocity_apsa(const std::vector<int32_t>& velocities) {
+  return vel_cmd_apsa.comm_write(velocities);
+}
+
+void ECManager::set_operation_mode(int8_t mode) {
+  target_mode_.store(mode, std::memory_order_relaxed);
+  RCLCPP_INFO(logger, "Operation mode target set to %d", mode);
 }
 
 uint16 ECManager::transition_ec(uint16 state) {

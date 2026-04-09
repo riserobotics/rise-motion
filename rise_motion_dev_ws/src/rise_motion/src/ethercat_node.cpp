@@ -14,6 +14,10 @@ EthercatNode::EthercatNode(IECManager &ec_manager)
       "motor_commands", 10,
       std::bind(&EthercatNode::commandCallback, this, _1));
 
+  cmd_vel_sub_ = create_subscription<rise_motion_messages::msg::MotorVelocity>(
+      "motor_commands_vel", 10,
+      std::bind(&EthercatNode::velocityCommandCallback, this, _1));
+
   feedback_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
       "motor_feedback", 10);
 
@@ -32,6 +36,10 @@ EthercatNode::EthercatNode(IECManager &ec_manager)
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
       "enable_ethercat",
       std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
+
+  mode_srv_ = create_service<rise_motion_messages::srv::SetOperationModeSrv>(
+      "set_operation_mode",
+      std::bind(&EthercatNode::setOperationModeCallback, this, _1, _2));
 
   sdo_read_srv_ = create_service<rise_motion_messages::srv::SDOReadSrv>(
       "sdo_read",
@@ -141,11 +149,40 @@ void EthercatNode::sdoReadServiceCallback(
   response->value	= value;
   response->value_type	= 0;
 }
+void EthercatNode::velocityCommandCallback(
+    rise_motion_messages::msg::MotorVelocity::SharedPtr msg) {
+  std::vector<int32_t> velocities(msg->velocities.begin(), msg->velocities.end());
+  if (!ec_manager_.set_motor_velocity_apsa(velocities)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue velocity commands");
+  }
+}
+
+void EthercatNode::setOperationModeCallback(
+    std::shared_ptr<rise_motion_messages::srv::SetOperationModeSrv::Request> request,
+    std::shared_ptr<rise_motion_messages::srv::SetOperationModeSrv::Response> response) {
+  if (!ethercat_enabled_) {
+    response->success = false;
+    response->message = "EtherCAT not enabled";
+    return;
+  }
+  if (request->mode != 8 && request->mode != 9) {
+    response->success = false;
+    response->message = "Invalid mode " + std::to_string(request->mode) + ". Only mode 8 (CyclicSyncPosition) and 9 (CyclicSyncVelocity) are supported.";
+    RCLCPP_WARN(get_logger(), "Rejected unsupported operation mode %d", request->mode);
+    return;
+  }
+  ec_manager_.set_operation_mode(request->mode);
+  response->success = true;
+  response->message = request->mode == 9 ? "Velocity mode active (mode 9)" : "Position mode active (mode 8)";
+  RCLCPP_INFO(get_logger(), "Operation mode set to %d", request->mode);
+}
+
 void EthercatNode::publishFullFeedback() {
   std::vector<MotorFeedbackData> feedback;
 
   if (ethercat_enabled_ && ec_manager_.get_full_feedback_apsa(feedback)) {
     auto msg = rise_motion_messages::msg::MotorFeedbackFull();
+    msg.header.stamp = now();
     for (const auto& f : feedback) {
       msg.statusword.push_back(f.statusword);
       msg.op_mode_display.push_back(f.op_mode_display);

@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rise_motion_messages REQUIRED)
+find_package(std_msgs REQUIRED)
 
 include_directories(include)
 
@@ -49,6 +50,19 @@ ament_target_dependencies(
 )
 install(TARGETS
   rise_motion_mock
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(admittance_node
+  src/admittance_node.cpp
+)
+target_link_libraries(admittance_node PUBLIC
+  ${rise_motion_messages_TARGETS}
+  ${std_msgs_TARGETS}
+  rclcpp::rclcpp
+)
+install(TARGETS
+  admittance_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

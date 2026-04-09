@@ -1,0 +1,4 @@
+int8 mode    # 8 = CyclicSyncPositionMode, 9 = CyclicSyncVelocityMode
+---
+bool success
+string message
