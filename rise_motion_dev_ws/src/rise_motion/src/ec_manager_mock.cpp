@@ -1,4 +1,3 @@
-#include <cmath>
 #include <cstdlib>
 #include <thread>
 #include <rclcpp/logging.hpp>
@@ -40,16 +39,9 @@ void MockECManager::cyclic_loop() {
     // Publish feedback to ROS thread (wait-free)
     feedback_apsa_.perf_write(mock_positions_);
 
-    // Simulate full PDO feedback: analog_input1 = 1Hz sinus (full ADC range)
-    // ADC range: 0=0V, 65535=5V, midpoint=32767.5=2.5V=0N (bipolar sensor)
-    double t = tick_count_ * period_.count() * 1e-3;
-    uint16_t analog_sim = static_cast<uint16_t>(
-        32767.5 + 32767.5 * std::sin(2.0 * M_PI * 1.0 * t));
-
     std::vector<MotorFeedbackData> full_feedback(num_motors_);
     for (int i = 0; i < num_motors_; ++i) {
-      full_feedback[i].position      = mock_positions_[i];
-      full_feedback[i].analog_input1 = analog_sim;
+      full_feedback[i].position = mock_positions_[i];
     }
     full_feedback_apsa_.perf_write(full_feedback);
 
