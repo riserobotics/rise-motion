@@ -10,6 +10,7 @@ MockECManager::MockECManager(int cycle_period_ms, int num_motors, float alpha)
       logger_(rclcpp::get_logger("MockECManager")),
       mock_positions_(num_motors, 0),
       motor_commands_(num_motors, 0),
+      velocity_commands_(num_motors, 0),
       period_(cycle_period_ms) {}
 
 int MockECManager::init_ec() {
@@ -27,13 +28,15 @@ void MockECManager::cyclic_loop() {
   while (running_) {
     next_ += period_;
 
-    // Pull latest motor commands from ROS thread (wait-free)
+    // Pull latest commands from ROS thread (wait-free)
     cmd_apsa_.perf_read(motor_commands_);
+    vel_cmd_apsa_.perf_read(velocity_commands_);
 
-    // Simulate motor: track commanded position with configurable lag
+    // Integrate velocity commands into position (dt = period in seconds)
+    const double dt = period_.count() * 1e-3;
     for (int i = 0; i < num_motors_; ++i) {
       mock_positions_[i] += static_cast<int32_t>(
-          alpha_ * static_cast<float>(motor_commands_[i] - mock_positions_[i]));
+          static_cast<double>(velocity_commands_[i]) * dt);
     }
 
     // Publish feedback to ROS thread (wait-free)
@@ -70,8 +73,8 @@ bool MockECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedb
   return full_feedback_apsa_.comm_read(feedback);
 }
 
-bool MockECManager::set_motor_velocity_apsa(const std::vector<int32_t>& /*velocities*/) {
-  return true;
+bool MockECManager::set_motor_velocity_apsa(const std::vector<int32_t>& velocities) {
+  return vel_cmd_apsa_.comm_write(velocities);
 }
 
 void MockECManager::set_operation_mode(int8_t mode) {

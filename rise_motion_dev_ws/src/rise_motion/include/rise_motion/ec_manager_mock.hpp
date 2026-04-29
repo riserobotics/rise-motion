@@ -37,12 +37,14 @@ private:
 
   std::vector<int32_t> mock_positions_;
   std::vector<int32_t> motor_commands_;
+  std::vector<int32_t> velocity_commands_;
   uint64_t tick_count_{0};
 
   std::chrono::time_point<std::chrono::steady_clock> next_;
   const std::chrono::duration<long, std::ratio<1, 1000>> period_;
 
   APSA<std::vector<int32_t>> cmd_apsa_;
+  APSA<std::vector<int32_t>> vel_cmd_apsa_;
   APSA<std::vector<int32_t>> feedback_apsa_;
   APSA<std::vector<MotorFeedbackData>> full_feedback_apsa_;
 };
