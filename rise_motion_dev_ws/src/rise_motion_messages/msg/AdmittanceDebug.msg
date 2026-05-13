@@ -20,6 +20,3 @@ float64[] vdot_deg          # [deg/s^2]
 float64[] velocity_raw_deg  # [deg/s]
 float64[] velocity_output_deg # [deg/s]
 float64[] displacement_deg  # [deg]
-
-# Gravity compensation
-float64[] tau_gravity       # [Nm]     gravity torque added to tau (0 if gravity_enabled=false)

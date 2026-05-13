@@ -36,6 +36,7 @@ private:
   const rclcpp::Logger logger_;
 
   std::vector<int32_t> mock_positions_;
+  std::vector<double> mock_positions_float_;
   std::vector<int32_t> motor_commands_;
   std::vector<int32_t> velocity_commands_;
   uint64_t tick_count_{0};

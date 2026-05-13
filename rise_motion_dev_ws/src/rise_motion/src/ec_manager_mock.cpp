@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdlib>
 #include <thread>
 #include <rclcpp/logging.hpp>
@@ -9,6 +10,7 @@ MockECManager::MockECManager(int cycle_period_ms, int num_motors, float alpha)
       alpha_(alpha),
       logger_(rclcpp::get_logger("MockECManager")),
       mock_positions_(num_motors, 0),
+      mock_positions_float_(num_motors, 0.0),
       motor_commands_(num_motors, 0),
       velocity_commands_(num_motors, 0),
       period_(cycle_period_ms) {}
@@ -32,11 +34,11 @@ void MockECManager::cyclic_loop() {
     cmd_apsa_.perf_read(motor_commands_);
     vel_cmd_apsa_.perf_read(velocity_commands_);
 
-    // Integrate velocity commands into position (dt = period in seconds)
+    // Integrate velocity commands into position with floating-point precision
     const double dt = period_.count() * 1e-3;
     for (int i = 0; i < num_motors_; ++i) {
-      mock_positions_[i] += static_cast<int32_t>(
-          static_cast<double>(velocity_commands_[i]) * dt);
+      mock_positions_float_[i] += static_cast<double>(velocity_commands_[i]) * dt;
+      mock_positions_[i] = static_cast<int32_t>(std::round(mock_positions_float_[i]));
     }
 
     // Publish feedback to ROS thread (wait-free)
