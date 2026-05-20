@@ -4,6 +4,7 @@ std_msgs/Header header  # ROS timestamp when debug data was computed
 
 
 # Force sensor calibration chain
+float64[] adc_voltage_raw   # [V]      ADC ticks -> voltage (uncalibrated, 0..5V range)
 float64[] adc_voltage       # [V]      ADC ticks -> voltage (centered: 0V = no force)
 float64[] force             # [N]      voltage -> force (before clipping)
 float64[] force_clipped     # [N]      after f_max clipping
