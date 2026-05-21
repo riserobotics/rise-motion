@@ -10,6 +10,9 @@ float64[] force             # [N]      voltage -> force (before clipping)
 float64[] force_clipped     # [N]      after f_max clipping
 float64[] torque_raw        # [Nm]     force_clipped * lever_arm -> input to controller
 
+# Absolute motor position (encoder ticks / enc_per_rad) — same reference as pos_min/max limits
+float64[] pos_rad           # [rad]      absolute encoder position
+
 # Admittance integration (rad)
 float64[] vdot              # [rad/s^2]  angular acceleration
 float64[] velocity_raw      # [rad/s]    after Euler integration (before safety)
