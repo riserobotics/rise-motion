@@ -104,6 +104,7 @@ void ECManager::cyclic_loop() {
 
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_velocities(ctx.slavecount, 0);
+  std::vector<int16_t> torque_offsets(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
   std::vector<MotorFeedbackData> full_feedback(ctx.slavecount);
 
@@ -175,6 +176,7 @@ void ECManager::cyclic_loop() {
       // 3. Once confirmed: send commands for the active mode
       cmd_apsa.perf_read(motor_commands);
       vel_cmd_apsa.perf_read(motor_velocities);
+      torque_offset_apsa.perf_read(torque_offsets);
       const int8_t target = target_mode_.load(std::memory_order_relaxed);
       m.outputs->OpMode = target;
       const bool mode_confirmed = (m.inputs->OpModeDisplay == target);
@@ -186,6 +188,7 @@ void ECManager::cyclic_loop() {
       } else {                   // CyclicSyncPositionMode (default)
         m.outputs->TargetPosition = motor_commands[i];
       }
+      m.outputs->TorqueOffset = torque_offsets[i];
       motor_feedback[i] = m.inputs->PositionValue;
 
       full_feedback[i].statusword                     = m.inputs->Statusword;
@@ -300,6 +303,10 @@ bool ECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData> &feedback)
 
 bool ECManager::set_motor_velocity_apsa(const std::vector<int32_t>& velocities) {
   return vel_cmd_apsa.comm_write(velocities);
+}
+
+bool ECManager::set_torque_offset_apsa(const std::vector<int16_t>& offsets) {
+  return torque_offset_apsa.comm_write(offsets);
 }
 
 void ECManager::set_operation_mode(int8_t mode) {

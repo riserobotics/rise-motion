@@ -27,6 +27,7 @@ public:
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values) override;
   bool get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) override;
   bool set_motor_velocity_apsa(const std::vector<int32_t>& velocities) override;
+  bool set_torque_offset_apsa(const std::vector<int16_t>& offsets) override;
   void set_operation_mode(int8_t mode) override;
 
   // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
@@ -57,6 +58,9 @@ private:
 
   // vel_cmd_apsa: ROS → EtherCAT (velocity commands, Mode 9)
   APSA<std::vector<int32_t>> vel_cmd_apsa;
+
+  // torque_offset_apsa: ROS → EtherCAT (0x60B2 torque offset, ‰ rated torque)
+  APSA<std::vector<int16_t>> torque_offset_apsa;
 
   // feedback_apsa: EtherCAT → ROS (motor positions only, für /motor_feedback)
   APSA<std::vector<int32_t>> feedback_apsa;
