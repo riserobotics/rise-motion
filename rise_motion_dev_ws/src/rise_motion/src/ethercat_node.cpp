@@ -18,6 +18,10 @@ EthercatNode::EthercatNode(IECManager &ec_manager)
       "motor_commands_vel", 10,
       std::bind(&EthercatNode::velocityCommandCallback, this, _1));
 
+  torque_offset_sub_ = create_subscription<rise_motion_messages::msg::MotorTorqueOffset>(
+      "motor_torque_offset", 10,
+      std::bind(&EthercatNode::torqueOffsetCallback, this, _1));
+
   feedback_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
       "motor_feedback", 10);
 
@@ -154,6 +158,14 @@ void EthercatNode::velocityCommandCallback(
   std::vector<int32_t> velocities(msg->velocities.begin(), msg->velocities.end());
   if (!ec_manager_.set_motor_velocity_apsa(velocities)) {
     RCLCPP_WARN(get_logger(), "Failed to queue velocity commands");
+  }
+}
+
+void EthercatNode::torqueOffsetCallback(
+    rise_motion_messages::msg::MotorTorqueOffset::SharedPtr msg) {
+  std::vector<int16_t> offsets(msg->torque_offsets.begin(), msg->torque_offsets.end());
+  if (!ec_manager_.set_torque_offset_apsa(offsets)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue torque offsets");
   }
 }
 
