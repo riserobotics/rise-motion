@@ -131,7 +131,7 @@ void EthercatNode::sdoReadServiceCallback(
   response->index	= request->index;
   response->subindex	= request->subindex;
   response->value	= value;
-  response->value_type	= 0;
+  response->value_type = request->value_type;
 }
 void EthercatNode::sdoWriteServiceCallback(
     const std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Request>
@@ -156,5 +156,5 @@ void EthercatNode::sdoWriteServiceCallback(
   response->device_id	= request->device_id;
   response->index	= request->index;
   response->subindex	= request->subindex;
-  response->value_type	= 0;
+  response->value_type = request->value_type;
 }
