@@ -415,4 +415,26 @@ namespace sdo
 
         return value;
     }
+
+
+
+    template <typename T> std::vector<std::uint8_t> serialize(const T& value)
+    {
+        static_assert(sdo::helpers::always_false<T>, "serialize<T>: unsupported type");
+        return{};
+    }
+
+    // Boolean
+
+    template <> inline std::vector<std::uint8_t> serialize<bool>(const bool& value)
+    {
+        return {static_cast<std::uint8_t>(value ? 1 : 0)};
+    }
+
+    // Signed Integer
+
+    template <> inline std::vector<std::uint8_t> serialize<std::int8_t>(const std::int8_t& value)
+    {
+        return {static_cast<std::uint8_t>(value)};
+    }
 }
