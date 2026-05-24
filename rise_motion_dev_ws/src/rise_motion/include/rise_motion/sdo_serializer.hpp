@@ -9,6 +9,7 @@
 #include <array>
 #include <cstring>
 #include <cstddef>
+#include <cmath>
 
 
 namespace sdo::helpers
@@ -267,7 +268,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 3, "Int24");
 
-        std::uint32_t raw = sdo::helpers::to_raw<std::uint16_t>(blob, 3);
+        std::uint32_t raw = sdo::helpers::to_raw<std::uint32_t>(blob, 3);
 
         if (raw & 0x00800000){
             raw |= 0xFF000000;
@@ -488,5 +489,114 @@ namespace sdo
         const std::vector<std::uint8_t>& value)
     {
         return value;
+    }
+
+    // Extended Signed Integer
+
+    template <> inline std::vector<std::uint8_t> serialize<Int24>(const Int24& value)
+    {
+        if (value.value < -pow(2, 23) || value.value > pow(2, 23)-1)
+        {
+            throw std::out_of_range("Int24 value exceeds 24 bit signed range");
+        }
+
+        const auto raw = static_cast<std::uint32_t>(value.value);
+
+        return sdo::helpers::from_raw<std::uint32_t>(raw, 3);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<Int40>(const Int40& value)
+    {
+        if (value.value < -pow(2, 39) || value.value > pow(2, 39)-1)
+        {
+            throw std::out_of_range("Int40 value exceeds 40 bit signed range");
+        }
+
+        const auto raw = static_cast<std::uint64_t>(value.value);
+
+        return sdo::helpers::from_raw<std::uint64_t>(raw, 5);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<Int48>(const Int48& value)
+    {
+        if (value.value < -pow(2, 47) || value.value > pow(2, 47)-1)
+        {
+            throw std::out_of_range("Int48 value exceeds 48 bit signed range");
+        }
+
+        const auto raw = static_cast<std::uint64_t>(value.value);
+
+        return sdo::helpers::from_raw<std::uint64_t>(raw, 6);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<Int56>(const Int56& value)
+    {
+        if (value.value < -pow(2, 55) || value.value > pow(2, 55)-1)
+        {
+            throw std::out_of_range("Int56 value exceeds 56 bit signed range");
+        }
+
+        const auto raw = static_cast<std::uint64_t>(value.value);
+
+        return sdo::helpers::from_raw<std::uint64_t>(raw, 7);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<int64_t>(const int64_t& value)
+    {
+        return sdo::helpers::from_raw<std::uint64_t>(static_cast<std::uint64_t>(value), 8);
+    }
+
+    // Extended unsigned Integer
+
+    template <> inline std::vector<std::uint8_t> serialize<UInt24>(const UInt24& value)
+    {
+        if (value.value > pow(2, 24)-1)
+        {
+            throw std::out_of_range("UInt24 value exceeds 24 bit unsigned range");
+        }
+
+        return sdo::helpers::from_raw<std::uint32_t>(value.value, 3);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<UInt40>(const UInt40& value)
+    {
+        if (value.value > pow(2, 40)-1)
+        {
+            throw std::out_of_range("UInt40 value exceeds 40 bit unsigned range");
+        }
+
+        return sdo::helpers::from_raw<std::uint64_t>(value.value, 5);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<UInt48>(const UInt48& value)
+    {
+        if (value.value > pow(2, 48)-1)
+        {
+            throw std::out_of_range("UInt48 value exceeds 48 bit unsigned range");
+        }
+
+        return sdo::helpers::from_raw<std::uint64_t>(value.value, 6);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<UInt56>(const UInt56& value)
+    {
+        if (value.value > pow(2, 56)-1)
+        {
+            throw std::out_of_range("UInt56 value exceeds 56 bit unsigned range");
+        }
+
+        return sdo::helpers::from_raw<std::uint64_t>(value.value, 7);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<uint64_t>(const uint64_t& value)
+    {
+        return sdo::helpers::from_raw<std::uint64_t>(value, 8);
+    }
+
+    // GUID
+
+    template <> inline std::vector<std::uint8_t> serialize<Guid>(const Guid& value)
+    {
+        return std::vector<std::uint8_t>(value.bytes.begin(), value.bytes.end());
     }
 }
