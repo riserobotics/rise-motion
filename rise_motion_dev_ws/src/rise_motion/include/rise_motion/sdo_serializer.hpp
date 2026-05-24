@@ -24,7 +24,7 @@ namespace sdo::helpers
         }
     }
 
-    template <typename T> inline T to_raw(
+    template <typename T> [[nodiscard]] inline T to_raw(
         const std::vector<std::uint8_t>& blob, std::size_t numBytes, std::size_t offset = 0)
     {
         static_assert(std::is_unsigned_v<T>, "to_raw<T>: T must be unsigned");
@@ -50,7 +50,7 @@ namespace sdo::helpers
         return raw;
     }
 
-    template <typename T> inline std::vector<std::uint8_t> from_raw(const T& raw, std::size_t numBytes)
+    template <typename T> [[nodiscard]] inline std::vector<std::uint8_t> from_raw(const T& raw, std::size_t numBytes)
     {
         static_assert(std::is_unsigned_v<T>, "from_raw<T>: T must be unsigned");
 
@@ -133,30 +133,32 @@ namespace sdo
     };
 
 
+    // ---DESERIALIZATION---
+
     template <typename T> T deserialize(const std::vector<std::uint8_t>&)
     {
         static_assert(sdo::helpers::always_false<T>, "deserialize<T>: unsupported type");
     }
 
-    // Boolean
+    // -Boolean-
 
-    template <> inline bool deserialize<bool>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline bool deserialize<bool>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 1, "bool");
 
         return blob[0] != 0;
     }
 
-    // Signed Integer
+    // -Signed Integer-
 
-    template <> inline std::int8_t deserialize<std::int8_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::int8_t deserialize<std::int8_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 1, "int8_t");
 
         return static_cast<std::int8_t>(blob[0]);
     }
 
-    template <> inline std::int16_t deserialize<std::int16_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::int16_t deserialize<std::int16_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 2, "int16_t");
 
@@ -165,7 +167,7 @@ namespace sdo
         return value;
     }
 
-    template <> inline std::int32_t deserialize<std::int32_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::int32_t deserialize<std::int32_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 4, "int32_t");
 
@@ -174,10 +176,10 @@ namespace sdo
         return value;
     }
 
-    // Unsigned Integer / raw data / bit arrays / bit strings
+    // -Unsigned Integer / raw data / bit arrays / bit strings-
 
     // use for UNSIGNED8, BYTE, BITARR8, BIT1-BIT8
-    template <> inline std::uint8_t deserialize<std::uint8_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::uint8_t deserialize<std::uint8_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 1, "uint8_t");
 
@@ -185,7 +187,7 @@ namespace sdo
     }
 
     // use for UNSIGNED16, WORD, BITARR16, BIT9-BIT16
-    template <> inline std::uint16_t deserialize<std::uint16_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::uint16_t deserialize<std::uint16_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 2, "uint16_t");
 
@@ -193,16 +195,16 @@ namespace sdo
     }
 
     // use for UNSIGNED32, DWORD, BITARR32
-    template <> inline std::uint32_t deserialize<std::uint32_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::uint32_t deserialize<std::uint32_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 4, "uint32_t");
 
         return sdo::helpers::to_raw<std::uint32_t>(blob, 4);
     }
 
-    // Floating Point
+    // -Floating Point-
 
-    template <> inline float deserialize<float>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline float deserialize<float>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 4, "float");
 
@@ -214,7 +216,7 @@ namespace sdo
         return value;
     }
 
-    template <> inline double deserialize<double>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline double deserialize<double>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 8, "double");
 
@@ -226,9 +228,9 @@ namespace sdo
         return value;
     }
 
-    // Time
+    // -Time-
 
-    template <> inline TimeOfDay deserialize<TimeOfDay>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline TimeOfDay deserialize<TimeOfDay>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 6, "TimeOfDay");
 
@@ -240,7 +242,7 @@ namespace sdo
         return value;
     }
 
-    template <> inline TimeDifference deserialize<TimeDifference>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline TimeDifference deserialize<TimeDifference>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 6, "TimeDifference");
 
@@ -254,17 +256,18 @@ namespace sdo
         return value;
     }
 
-    // Domain (returns raw blob as equivalent to the EtherCAT Domain data type)
+    // -Domain-
+    // (returns raw blob as equivalent to the EtherCAT Domain data type)
 
-    template <> inline std::vector<std::uint8_t> deserialize<std::vector<std::uint8_t>>(
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> deserialize<std::vector<std::uint8_t>>(
         const std::vector<std::uint8_t>& blob)
     {
         return blob;
     }
 
-    // Extended Signed Integer
+    // -Extended Signed Integer-
 
-    template <> inline Int24 deserialize<Int24>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline Int24 deserialize<Int24>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 3, "Int24");
 
@@ -277,7 +280,7 @@ namespace sdo
         return Int24{static_cast<std::int32_t>(raw)};
     }
 
-    template <> inline Int40 deserialize<Int40>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline Int40 deserialize<Int40>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 5, "Int40");
 
@@ -291,7 +294,7 @@ namespace sdo
         return Int40{static_cast<std::int64_t>(raw)};
     }
 
-    template <> inline Int48 deserialize<Int48>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline Int48 deserialize<Int48>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 6, "Int48");
 
@@ -305,7 +308,7 @@ namespace sdo
         return Int48{static_cast<std::int64_t>(raw)};
     }
 
-    template <> inline Int56 deserialize<Int56>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline Int56 deserialize<Int56>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 7, "Int56");
 
@@ -319,53 +322,53 @@ namespace sdo
         return Int56{static_cast<std::int64_t>(raw)};
     }
 
-    template <> inline std::int64_t deserialize<std::int64_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::int64_t deserialize<std::int64_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 8, "int64_t");
 
         return static_cast<std::int64_t>(sdo::helpers::to_raw<std::uint64_t>(blob, 8));
     }
 
-    // Extended Unsigned Integer
+    // -Extended Unsigned Integer-
 
-    template <> inline UInt24 deserialize<UInt24>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline UInt24 deserialize<UInt24>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 3, "UInt24");
 
         return UInt24{sdo::helpers::to_raw<std::uint32_t>(blob, 3)};
     }
 
-    template <> inline UInt40 deserialize<UInt40>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline UInt40 deserialize<UInt40>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 5, "UInt40");
 
         return UInt40{sdo::helpers::to_raw<std::uint64_t>(blob, 5)};
     }
 
-    template <> inline UInt48 deserialize<UInt48>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline UInt48 deserialize<UInt48>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 6, "UInt48");
 
         return UInt48{sdo::helpers::to_raw<std::uint64_t>(blob, 6)};
     }
 
-    template <> inline UInt56 deserialize<UInt56>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline UInt56 deserialize<UInt56>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 7, "UInt56");
 
         return UInt56{sdo::helpers::to_raw<std::uint64_t>(blob, 7)};
     }
 
-    template <> inline std::uint64_t deserialize<std::uint64_t>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline std::uint64_t deserialize<std::uint64_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 8, "uint64_t");
 
         return sdo::helpers::to_raw<std::uint64_t>(blob, 8);
     }
 
-    // GUID
+    // -GUID-
 
-    template <> inline Guid deserialize<Guid>(const std::vector<std::uint8_t>& blob)
+    template <> [[nodiscard]] inline Guid deserialize<Guid>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 16, "Guid");
 
@@ -380,6 +383,7 @@ namespace sdo
     }
 
 
+    // ---SERIALIZATION---
 
     template <typename T> std::vector<std::uint8_t> serialize(const T& value)
     {
@@ -387,54 +391,54 @@ namespace sdo
         return{};
     }
 
-    // Boolean
+    // -Boolean-
 
-    template <> inline std::vector<std::uint8_t> serialize<bool>(const bool& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<bool>(const bool& value)
     {
         return {static_cast<std::uint8_t>(value ? 1 : 0)};
     }
 
-    // Signed Integer
+    // -Signed Integer-
 
-    template <> inline std::vector<std::uint8_t> serialize<std::int8_t>(const std::int8_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::int8_t>(const std::int8_t& value)
     {
         return {static_cast<std::uint8_t>(value)};
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<std::int16_t>(const std::int16_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::int16_t>(const std::int16_t& value)
     {
         return sdo::helpers::from_raw<std::uint16_t>(static_cast<std::uint16_t>(value), 2);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<std::int32_t>(const std::int32_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::int32_t>(const std::int32_t& value)
     {
         return sdo::helpers::from_raw<std::uint32_t>(static_cast<std::uint32_t>(value), 4);
     }
 
-    // Unsigned Integer / raw data / bit arrays / bit strings
+    // -Unsigned Integer / raw data / bit arrays / bit strings-
 
     // use for UNSIGNED8, BYTE, BITARR8, BIT1-BIT8
-    template <> inline std::vector<std::uint8_t> serialize<std::uint8_t>(const std::uint8_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::uint8_t>(const std::uint8_t& value)
     {
         return { value };
     }
 
     // use for UNSIGNED16, WORD, BITARR16, BIT9-BIT16
-    template <> inline std::vector<std::uint8_t> serialize<std::uint16_t>(const std::uint16_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::uint16_t>(const std::uint16_t& value)
     {
         return sdo::helpers::from_raw<std::uint16_t>(value, 2);
     }
 
     // use for UNSIGNED32, DWORD, BITARR32
 
-    template <> inline std::vector<std::uint8_t> serialize<std::uint32_t>(const std::uint32_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::uint32_t>(const std::uint32_t& value)
     {
         return sdo::helpers::from_raw<std::uint32_t>(value, 4);
     }
 
-    // Floating Point
+    // -Floating Point-
 
-    template <> inline std::vector<std::uint8_t> serialize<float>(const float& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<float>(const float& value)
     {
         std::uint32_t raw;
         std::memcpy(&raw, &value, sizeof(raw));
@@ -442,7 +446,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint32_t>(raw, 4);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<double>(const double& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<double>(const double& value)
     {
         std::uint64_t raw;
         std::memcpy(&raw, &value, sizeof(raw));
@@ -450,9 +454,9 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(raw, 8);
     }
 
-    // Time
+    // -Time-
 
-    template <> inline std::vector<std::uint8_t> serialize<TimeOfDay>(const TimeOfDay& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<TimeOfDay>(const TimeOfDay& value)
     {
         return {
             static_cast<std::uint8_t>(value.ms_since_midnight & 0xFF),
@@ -465,7 +469,7 @@ namespace sdo
         };
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<TimeDifference>(const TimeDifference& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<TimeDifference>(const TimeDifference& value)
     {
         if (value.ms > 0x0FFFFFFF)
         {
@@ -483,17 +487,18 @@ namespace sdo
         };
     }
 
-    // Domain (returns raw blob as equivalent to the EtherCAT Domain data type)
+    // -Domain-
+    // (returns raw blob as equivalent to the EtherCAT Domain data type)
 
-    template <> inline std::vector<std::uint8_t> serialize<std::vector<std::uint8_t>>(
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<std::vector<std::uint8_t>>(
         const std::vector<std::uint8_t>& value)
     {
         return value;
     }
 
-    // Extended Signed Integer
+    // -Extended Signed Integer-
 
-    template <> inline std::vector<std::uint8_t> serialize<Int24>(const Int24& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int24>(const Int24& value)
     {
         if (value.value < -pow(2, 23) || value.value > pow(2, 23)-1)
         {
@@ -505,7 +510,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint32_t>(raw, 3);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<Int40>(const Int40& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int40>(const Int40& value)
     {
         if (value.value < -pow(2, 39) || value.value > pow(2, 39)-1)
         {
@@ -517,7 +522,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(raw, 5);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<Int48>(const Int48& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int48>(const Int48& value)
     {
         if (value.value < -pow(2, 47) || value.value > pow(2, 47)-1)
         {
@@ -529,7 +534,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(raw, 6);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<Int56>(const Int56& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int56>(const Int56& value)
     {
         if (value.value < -pow(2, 55) || value.value > pow(2, 55)-1)
         {
@@ -541,14 +546,14 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(raw, 7);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<int64_t>(const int64_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<int64_t>(const int64_t& value)
     {
         return sdo::helpers::from_raw<std::uint64_t>(static_cast<std::uint64_t>(value), 8);
     }
 
-    // Extended unsigned Integer
+    // -Extended unsigned Integer-
 
-    template <> inline std::vector<std::uint8_t> serialize<UInt24>(const UInt24& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt24>(const UInt24& value)
     {
         if (value.value > pow(2, 24)-1)
         {
@@ -558,7 +563,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint32_t>(value.value, 3);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<UInt40>(const UInt40& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt40>(const UInt40& value)
     {
         if (value.value > pow(2, 40)-1)
         {
@@ -568,7 +573,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(value.value, 5);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<UInt48>(const UInt48& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt48>(const UInt48& value)
     {
         if (value.value > pow(2, 48)-1)
         {
@@ -578,7 +583,7 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(value.value, 6);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<UInt56>(const UInt56& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt56>(const UInt56& value)
     {
         if (value.value > pow(2, 56)-1)
         {
@@ -588,14 +593,14 @@ namespace sdo
         return sdo::helpers::from_raw<std::uint64_t>(value.value, 7);
     }
 
-    template <> inline std::vector<std::uint8_t> serialize<uint64_t>(const uint64_t& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<uint64_t>(const uint64_t& value)
     {
         return sdo::helpers::from_raw<std::uint64_t>(value, 8);
     }
 
-    // GUID
+    // -GUID-
 
-    template <> inline std::vector<std::uint8_t> serialize<Guid>(const Guid& value)
+    template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Guid>(const Guid& value)
     {
         return std::vector<std::uint8_t>(value.bytes.begin(), value.bytes.end());
     }
