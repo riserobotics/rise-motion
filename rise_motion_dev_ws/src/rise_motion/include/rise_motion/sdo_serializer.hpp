@@ -106,6 +106,39 @@ namespace sdo::helpers
         
         return raw;
     }
+
+
+    inline std::vector<std::uint8_t> from_16bit_raw(const std::uint16_t& raw)
+    {
+        return {
+            static_cast<std::uint8_t>(raw & 0xFF),
+            static_cast<std::uint8_t>((raw >> 8) & 0xFF)
+        };
+    }
+
+    inline std::vector<std::uint8_t> from_32bit_raw(const std::uint32_t& raw)
+    {
+        return {
+            static_cast<std::uint8_t>(raw & 0xFF),
+            static_cast<std::uint8_t>((raw >> 8) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 16) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 24) & 0xFF)
+        };
+    }
+
+    inline std::vector<std::uint8_t> from_64bit_raw(const std::uint64_t& raw)
+    {
+        return {
+            static_cast<std::uint8_t>(raw & 0xFF),
+            static_cast<std::uint8_t>((raw >> 8) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 16) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 24) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 32) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 40) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 48) & 0xFF),
+            static_cast<std::uint8_t>((raw >> 56) & 0xFF)
+        };
+    }
 }
 
 namespace sdo
@@ -436,5 +469,95 @@ namespace sdo
     template <> inline std::vector<std::uint8_t> serialize<std::int8_t>(const std::int8_t& value)
     {
         return {static_cast<std::uint8_t>(value)};
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<std::int16_t>(const std::int16_t& value)
+    {
+        return sdo::helpers::from_16bit_raw(static_cast<std::uint16_t>(value));
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<std::int32_t>(const std::int32_t& value)
+    {
+        return sdo::helpers::from_32bit_raw(static_cast<std::uint32_t>(value));
+    }
+
+    // Unsigned Integer / raw data / bit arrays / bit strings
+
+    // use for UNSIGNED8, BYTE, BITARR8, BIT1-BIT8
+    template <> inline std::vector<std::uint8_t> serialize<std::uint8_t>(const std::uint8_t& value)
+    {
+        return { value };
+    }
+
+    // use for UNSIGNED16, WORD, BITARR16, BIT9-BIT16
+    template <> inline std::vector<std::uint8_t> serialize<std::uint16_t>(const std::uint16_t& value)
+    {
+        return sdo::helpers::from_16bit_raw(value);
+    }
+
+    // use for UNSIGNED32, DWORD, BITARR32
+
+    template <> inline std::vector<std::uint8_t> serialize<std::uint32_t>(const std::uint32_t& value)
+    {
+        return sdo::helpers::from_32bit_raw(value);
+    }
+
+    // Floating Point
+
+    template <> inline std::vector<std::uint8_t> serialize<float>(const float& value)
+    {
+        std::uint32_t raw;
+        std::memcpy(&raw, &value, sizeof(raw));
+
+        return sdo::helpers::from_32bit_raw(raw);
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<double>(const double& value)
+    {
+        std::uint64_t raw;
+        std::memcpy(&raw, &value, sizeof(raw));
+
+        return sdo::helpers::from_64bit_raw(raw);
+    }
+
+    // Time
+
+    template <> inline std::vector<std::uint8_t> serialize<TimeOfDay>(const TimeOfDay& value)
+    {
+        return {
+            static_cast<std::uint8_t>(value.ms_since_midnight & 0xFF),
+            static_cast<std::uint8_t>((value.ms_since_midnight >> 8) & 0xFF),
+            static_cast<std::uint8_t>((value.ms_since_midnight >> 16) & 0xFF),
+            static_cast<std::uint8_t>((value.ms_since_midnight >> 24) & 0xFF),
+
+            static_cast<std::uint8_t>(value.d_since_1984_01_01 & 0xFF),
+            static_cast<std::uint8_t>((value.d_since_1984_01_01 >> 8) & 0xFF)
+        };
+    }
+
+    template <> inline std::vector<std::uint8_t> serialize<TimeDifference>(const TimeDifference& value)
+    {
+        if (value.ms > 0x0FFFFFFF)
+        {
+            throw std::out_of_range("serialize<TimeDifference>: TimeDifference.ms exceeds 28 bit range");
+        }
+
+        return {
+            static_cast<std::uint8_t>(value.ms & 0xFF),
+            static_cast<std::uint8_t>((value.ms >> 8) & 0xFF),
+            static_cast<std::uint8_t>((value.ms >> 16) & 0xFF),
+            static_cast<std::uint8_t>((value.ms >> 24) & 0xFF),
+
+            static_cast<std::uint8_t>(value.d & 0xFF),
+            static_cast<std::uint8_t>((value.d >> 8) & 0xFF)
+        };
+    }
+
+    // Domain (returns raw blob as equivalent to the EtherCAT Domain data type)
+
+    template <> inline std::vector<std::uint8_t> serialize<std::vector<std::uint8_t>>(
+        const std::vector<std::uint8_t>& value)
+    {
+        return value;
     }
 }
