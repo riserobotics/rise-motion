@@ -23,121 +23,50 @@ namespace sdo::helpers
         }
     }
 
-    inline std::uint16_t to_16bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
+    template <typename T> inline T to_raw(
+        const std::vector<std::uint8_t>& blob, std::size_t numBytes, std::size_t offset = 0)
     {
-        std::uint16_t raw =
-            static_cast<std::uint16_t>(blob[offset + 0]) |
-            static_cast<std::uint16_t>(blob[offset + 1]) << 8;
-        
+        static_assert(std::is_unsigned_v<T>, "to_raw<T>: T must be unsigned");
+        static_assert(sizeof(T) <= sizeof(std::uint64_t), "to_raw<T>: T can be max uint64_t");
+
+        if (numBytes > sizeof(T))
+        {
+            throw std::invalid_argument("to_raw<T>: numBytes does not fit T");
+        }
+
+        if (offset + numBytes > blob.size())
+        {
+            throw std::out_of_range("to_raw<T>: blob has less bytes than numBytes");
+        }
+
+        T raw = 0;
+
+        for (std::size_t i = 0; i < numBytes; ++i)
+        {
+            raw |= static_cast<T>(blob[offset + i]) << (8 * i);
+        }
+
         return raw;
     }
 
-    inline std::uint32_t to_24bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
+    template <typename T> inline std::vector<std::uint8_t> from_raw(const T& raw, std::size_t numBytes)
     {
-        std::uint32_t raw =
-            static_cast<std::uint32_t>(blob[offset + 0]) |
-            static_cast<std::uint32_t>(blob[offset + 1]) << 8 |
-            static_cast<std::uint32_t>(blob[offset + 2]) << 16;
-        
-        return raw;
-    }
+        static_assert(std::is_unsigned_v<T>, "from_raw<T>: T must be unsigned");
 
-    inline std::uint32_t to_32bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
-    {
-        std::uint32_t raw =
-            static_cast<std::uint32_t>(blob[offset + 0]) |
-            static_cast<std::uint32_t>(blob[offset + 1]) << 8 |
-            static_cast<std::uint32_t>(blob[offset + 2]) << 16 |
-            static_cast<std::uint32_t>(blob[offset + 3]) << 24;
-        
-        return raw;
-    }
+        if (numBytes > sizeof(T))
+        {
+            throw std::invalid_argument("from_raw<T>: numBytes does not fit T");
+        }
 
-    inline std::uint64_t to_40bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
-    {
-        std::uint64_t raw =
-            static_cast<std::uint64_t>(blob[offset + 0]) |
-            static_cast<std::uint64_t>(blob[offset + 1]) << 8 |
-            static_cast<std::uint64_t>(blob[offset + 2]) << 16 |
-            static_cast<std::uint64_t>(blob[offset + 3]) << 24 |
-            static_cast<std::uint64_t>(blob[offset + 4]) << 32;
-        
-        return raw;
-    }
+        std::vector<std::uint8_t> blob;
+        blob.reserve(numBytes);
 
-    inline std::uint64_t to_48bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
-    {
-        std::uint64_t raw =
-            static_cast<std::uint64_t>(blob[offset + 0]) |
-            static_cast<std::uint64_t>(blob[offset + 1]) << 8 |
-            static_cast<std::uint64_t>(blob[offset + 2]) << 16 |
-            static_cast<std::uint64_t>(blob[offset + 3]) << 24 |
-            static_cast<std::uint64_t>(blob[offset + 4]) << 32 |
-            static_cast<std::uint64_t>(blob[offset + 5]) << 40;
-        
-        return raw;
-    }
+        for (std::size_t i = 0; i < numBytes; ++i)
+        {
+            blob.push_back(static_cast<std::uint8_t>((raw >> (8 * i)) & 0xFF));
+        }
 
-    inline std::uint64_t to_56bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
-    {
-        std::uint64_t raw =
-            static_cast<std::uint64_t>(blob[offset + 0]) |
-            static_cast<std::uint64_t>(blob[offset + 1]) << 8 |
-            static_cast<std::uint64_t>(blob[offset + 2]) << 16 |
-            static_cast<std::uint64_t>(blob[offset + 3]) << 24 |
-            static_cast<std::uint64_t>(blob[offset + 4]) << 32 |
-            static_cast<std::uint64_t>(blob[offset + 5]) << 40 |
-            static_cast<std::uint64_t>(blob[offset + 6]) << 48;
-        
-        return raw;
-    }
-
-    inline std::uint64_t to_64bit_raw(const std::vector<std::uint8_t>& blob, std::size_t offset = 0)
-    {
-        std::uint64_t raw =
-            static_cast<std::uint64_t>(blob[offset + 0]) |
-            static_cast<std::uint64_t>(blob[offset + 1]) << 8 |
-            static_cast<std::uint64_t>(blob[offset + 2]) << 16 |
-            static_cast<std::uint64_t>(blob[offset + 3]) << 24 |
-            static_cast<std::uint64_t>(blob[offset + 4]) << 32 |
-            static_cast<std::uint64_t>(blob[offset + 5]) << 40 |
-            static_cast<std::uint64_t>(blob[offset + 6]) << 48 |
-            static_cast<std::uint64_t>(blob[offset + 7]) << 56;
-        
-        return raw;
-    }
-
-
-    inline std::vector<std::uint8_t> from_16bit_raw(const std::uint16_t& raw)
-    {
-        return {
-            static_cast<std::uint8_t>(raw & 0xFF),
-            static_cast<std::uint8_t>((raw >> 8) & 0xFF)
-        };
-    }
-
-    inline std::vector<std::uint8_t> from_32bit_raw(const std::uint32_t& raw)
-    {
-        return {
-            static_cast<std::uint8_t>(raw & 0xFF),
-            static_cast<std::uint8_t>((raw >> 8) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 16) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 24) & 0xFF)
-        };
-    }
-
-    inline std::vector<std::uint8_t> from_64bit_raw(const std::uint64_t& raw)
-    {
-        return {
-            static_cast<std::uint8_t>(raw & 0xFF),
-            static_cast<std::uint8_t>((raw >> 8) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 16) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 24) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 32) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 40) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 48) & 0xFF),
-            static_cast<std::uint8_t>((raw >> 56) & 0xFF)
-        };
+        return blob;
     }
 }
 
@@ -230,7 +159,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 2, "int16_t");
 
-        std::int16_t value = static_cast<std::int16_t>(sdo::helpers::to_16bit_raw(blob));
+        std::int16_t value = static_cast<std::int16_t>(sdo::helpers::to_raw<std::uint16_t>(blob, 2));
 
         return value;
     }
@@ -239,7 +168,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 4, "int32_t");
 
-        std::int32_t value = static_cast<std::int32_t>(sdo::helpers::to_32bit_raw(blob));
+        std::int32_t value = static_cast<std::int32_t>(sdo::helpers::to_raw<std::uint32_t>(blob, 4));
 
         return value;
     }
@@ -259,7 +188,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 2, "uint16_t");
 
-        return sdo::helpers::to_16bit_raw(blob);
+        return sdo::helpers::to_raw<std::uint16_t>(blob, 2);
     }
 
     // use for UNSIGNED32, DWORD, BITARR32
@@ -267,7 +196,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 4, "uint32_t");
 
-        return sdo::helpers::to_32bit_raw(blob);
+        return sdo::helpers::to_raw<std::uint32_t>(blob, 4);
     }
 
     // Floating Point
@@ -276,7 +205,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 4, "float");
 
-        std::uint32_t raw = sdo::helpers::to_32bit_raw(blob);
+        std::uint32_t raw = sdo::helpers::to_raw<std::uint32_t>(blob, 4);
 
         float value;
         std::memcpy(&value, &raw, sizeof(value));
@@ -288,7 +217,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 8, "double");
 
-        std::uint64_t raw = sdo::helpers::to_64bit_raw(blob);
+        std::uint64_t raw = sdo::helpers::to_raw<std::uint64_t>(blob, 8);
 
         double value;
         std::memcpy(&value, &raw, sizeof(value));
@@ -304,8 +233,8 @@ namespace sdo
 
         TimeOfDay value{};
 
-        value.ms_since_midnight = sdo::helpers::to_32bit_raw(blob);
-        value.d_since_1984_01_01 = sdo::helpers::to_16bit_raw(blob, 4);
+        value.ms_since_midnight = sdo::helpers::to_raw<std::uint32_t>(blob, 4);
+        value.d_since_1984_01_01 = sdo::helpers::to_raw<std::uint16_t>(blob, 2, 4);
 
         return value;
     }
@@ -317,9 +246,9 @@ namespace sdo
         TimeDifference value{};
 
         // the upper 4 bits of ms are reserved
-        value.ms = sdo::helpers::to_32bit_raw(blob) & 0x0FFFFFFF;
+        value.ms = sdo::helpers::to_raw<std::uint32_t>(blob, 4) & 0x0FFFFFFF;
 
-        value.d = sdo::helpers::to_16bit_raw(blob, 4);
+        value.d = sdo::helpers::to_raw<std::uint16_t>(blob, 2, 4);
 
         return value;
     }
@@ -338,7 +267,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 3, "Int24");
 
-        std::uint32_t raw = sdo::helpers::to_24bit_raw(blob);
+        std::uint32_t raw = sdo::helpers::to_raw<std::uint16_t>(blob, 3);
 
         if (raw & 0x00800000){
             raw |= 0xFF000000;
@@ -351,7 +280,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 5, "Int40");
 
-        std::uint64_t raw = sdo::helpers::to_40bit_raw(blob);
+        std::uint64_t raw = sdo::helpers::to_raw<std::uint64_t>(blob, 5);
 
         if (raw & 0x0000008000000000ULL)
         {
@@ -365,7 +294,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 6, "Int48");
 
-        std::uint64_t raw = sdo::helpers::to_48bit_raw(blob);
+        std::uint64_t raw = sdo::helpers::to_raw<std::uint64_t>(blob, 6);
 
         if (raw & 0x0000800000000000ULL)
         {
@@ -379,7 +308,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 7, "Int56");
 
-        std::uint64_t raw = sdo::helpers::to_56bit_raw(blob);
+        std::uint64_t raw = sdo::helpers::to_raw<std::uint64_t>(blob, 7);
 
         if (raw & 0x0080000000000000ULL)
         {
@@ -393,7 +322,7 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 8, "int64_t");
 
-        return static_cast<std::int64_t>(sdo::helpers::to_64bit_raw(blob));
+        return static_cast<std::int64_t>(sdo::helpers::to_raw<std::uint64_t>(blob, 8));
     }
 
     // Extended Unsigned Integer
@@ -402,35 +331,35 @@ namespace sdo
     {
         sdo::helpers::check_size(blob, 3, "UInt24");
 
-        return UInt24{sdo::helpers::to_24bit_raw(blob)};
+        return UInt24{sdo::helpers::to_raw<std::uint32_t>(blob, 3)};
     }
 
     template <> inline UInt40 deserialize<UInt40>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 5, "UInt40");
 
-        return UInt40{sdo::helpers::to_40bit_raw(blob)};
+        return UInt40{sdo::helpers::to_raw<std::uint64_t>(blob, 5)};
     }
 
     template <> inline UInt48 deserialize<UInt48>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 6, "UInt48");
 
-        return UInt48{sdo::helpers::to_48bit_raw(blob)};
+        return UInt48{sdo::helpers::to_raw<std::uint64_t>(blob, 6)};
     }
 
     template <> inline UInt56 deserialize<UInt56>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 7, "UInt56");
 
-        return UInt56{sdo::helpers::to_56bit_raw(blob)};
+        return UInt56{sdo::helpers::to_raw<std::uint64_t>(blob, 7)};
     }
 
     template <> inline std::uint64_t deserialize<std::uint64_t>(const std::vector<std::uint8_t>& blob)
     {
         sdo::helpers::check_size(blob, 8, "uint64_t");
 
-        return sdo::helpers::to_64bit_raw(blob);
+        return sdo::helpers::to_raw<std::uint64_t>(blob, 8);
     }
 
     // GUID
@@ -473,12 +402,12 @@ namespace sdo
 
     template <> inline std::vector<std::uint8_t> serialize<std::int16_t>(const std::int16_t& value)
     {
-        return sdo::helpers::from_16bit_raw(static_cast<std::uint16_t>(value));
+        return sdo::helpers::from_raw<std::uint16_t>(static_cast<std::uint16_t>(value), 2);
     }
 
     template <> inline std::vector<std::uint8_t> serialize<std::int32_t>(const std::int32_t& value)
     {
-        return sdo::helpers::from_32bit_raw(static_cast<std::uint32_t>(value));
+        return sdo::helpers::from_raw<std::uint32_t>(static_cast<std::uint32_t>(value), 4);
     }
 
     // Unsigned Integer / raw data / bit arrays / bit strings
@@ -492,14 +421,14 @@ namespace sdo
     // use for UNSIGNED16, WORD, BITARR16, BIT9-BIT16
     template <> inline std::vector<std::uint8_t> serialize<std::uint16_t>(const std::uint16_t& value)
     {
-        return sdo::helpers::from_16bit_raw(value);
+        return sdo::helpers::from_raw<std::uint16_t>(value, 2);
     }
 
     // use for UNSIGNED32, DWORD, BITARR32
 
     template <> inline std::vector<std::uint8_t> serialize<std::uint32_t>(const std::uint32_t& value)
     {
-        return sdo::helpers::from_32bit_raw(value);
+        return sdo::helpers::from_raw<std::uint32_t>(value, 4);
     }
 
     // Floating Point
@@ -509,7 +438,7 @@ namespace sdo
         std::uint32_t raw;
         std::memcpy(&raw, &value, sizeof(raw));
 
-        return sdo::helpers::from_32bit_raw(raw);
+        return sdo::helpers::from_raw<std::uint32_t>(raw, 4);
     }
 
     template <> inline std::vector<std::uint8_t> serialize<double>(const double& value)
@@ -517,7 +446,7 @@ namespace sdo
         std::uint64_t raw;
         std::memcpy(&raw, &value, sizeof(raw));
 
-        return sdo::helpers::from_64bit_raw(raw);
+        return sdo::helpers::from_raw<std::uint64_t>(raw, 8);
     }
 
     // Time
