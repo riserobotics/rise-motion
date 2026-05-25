@@ -74,8 +74,8 @@ TEST(SDOSerializationTest, uInt8)
   std::uint8_t value_zero = 0;
   std::uint8_t value_max = std::numeric_limits<std::uint8_t>::max();
 
-  std::vector<std::uint8_t> blob = sdo::serialize<std::uint8_t>(value_zero);
-  auto result_zero = sdo::deserialize<std::uint8_t>(blob);
+  std::vector<std::uint8_t> blob = sdo::serialize<sdo::USINT>(value_zero);
+  auto result_zero = sdo::deserialize<sdo::UNSIGNED8>(blob);
   ASSERT_EQ(result_zero, value_zero);
 
   blob = sdo::serialize<std::uint8_t>(value_max);
@@ -180,13 +180,13 @@ TEST(SDOSerializationTest, Domain)
 
 TEST(SDOSerializationTest, Int24)
 {
-  sdo::Int24 value_zero{0};
+  std::int32_t value_zero = 0;
   sdo::Int24 value_max{(std::int64_t{1} << 23) - 1};
   sdo::Int24 value_min{-(std::int64_t{1} << 23)};
 
-  std::vector<std::uint8_t> blob = sdo::serialize<sdo::Int24>(value_zero);
-  auto result_zero = sdo::deserialize<sdo::Int24>(blob);
-  ASSERT_EQ(result_zero.value, value_zero.value);
+  std::vector<std::uint8_t> blob = sdo::serialize<sdo::INTEGER24>(value_zero);
+  auto result_zero = sdo::deserialize<sdo::INTEGER24>(blob);
+  ASSERT_EQ(result_zero, value_zero);
 
   blob = sdo::serialize<sdo::Int24>(value_max);
   auto result_max = sdo::deserialize<sdo::Int24>(blob);
@@ -355,4 +355,27 @@ TEST(SDOSerializationTest, Guid)
   std::vector<std::uint8_t> blob = sdo::serialize<sdo::Guid>(value);
   auto result = sdo::deserialize<sdo::Guid>(blob);
   ASSERT_EQ(result.bytes, value.bytes);
+}
+
+TEST(SDOSerializationTest, String50)
+{
+  std::string string = "RISE";
+
+  std::vector<std::uint8_t> blob = sdo::serialize<sdo::STRING<50>>(string);
+
+  ASSERT_EQ(blob.size(), 50);
+
+  ASSERT_EQ(blob[0], static_cast<std::uint8_t>('R'));
+  ASSERT_EQ(blob[1], static_cast<std::uint8_t>('I'));
+  ASSERT_EQ(blob[2], static_cast<std::uint8_t>('S'));
+  ASSERT_EQ(blob[3], static_cast<std::uint8_t>('E'));
+
+  for (std::size_t i = string.size(); i < blob.size(); ++i)
+  {
+    ASSERT_EQ(blob[i], 0);
+  }
+
+  std::string result = sdo::deserialize<sdo::STRING<50>>(blob);
+
+  ASSERT_EQ(result, string);
 }
