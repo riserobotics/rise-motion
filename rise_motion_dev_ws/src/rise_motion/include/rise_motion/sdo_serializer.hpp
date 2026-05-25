@@ -19,8 +19,8 @@ namespace sdo::helpers
     inline void check_size(const std::vector<std::uint8_t>& blob, std::size_t expectedSize, const char* type)
     {
         if (blob.size() != expectedSize){
-            throw std::invalid_argument(std::string("deserialize<") + type +
-                ">: expected " + std::to_string(expectedSize) + " bytes, got " + std::to_string(blob.size()));
+            throw std::invalid_argument(std::string("deserialize<") + type + ">: expected " + 
+                std::to_string(expectedSize) + " bytes, got " + std::to_string(blob.size()));
         }
     }
 
@@ -90,47 +90,206 @@ namespace sdo
     struct Int24
     {
         std::int32_t value;
+
+        Int24(std::int32_t v) : value(v)
+        {
+            if (v < -pow(2, 23) || v > pow(2, 23)-1){
+                throw std::out_of_range("Can not convert int32_t value exceeding 24 bit signed range into Int24");
+            }
+        }
+
+        operator std::int32_t() const
+        {
+            return value;
+        }
     };
 
     struct Int40
     {
         std::int64_t value;
+
+        Int40(std::int64_t v) : value(v)
+        {
+            if (v < -pow(2, 39) || v > pow(2, 39)-1){
+                throw std::out_of_range("Can not convert int64_t value exceeding 40 bit signed range into Int40");
+            }
+        }
+
+        operator std::int64_t() const
+        {
+            return value;
+        }
     };
 
     struct Int48
     {
         std::int64_t value;
+
+        Int48(std::int64_t v) : value(v)
+        {
+            if (v < -pow(2, 47) || v > pow(2, 47)-1){
+                throw std::out_of_range("Can not convert int64_t value exceeding 48 bit signed range into Int48");
+            }
+        }
+
+        operator std::int64_t() const
+        {
+            return value;
+        }
     };
 
     struct Int56
     {
         std::int64_t value;
+
+        Int56(std::int64_t v) : value(v)
+        {
+            if (v < -pow(2, 55) || v > pow(2, 55)-1){
+                throw std::out_of_range("Can not convert int64_t value exceeding 56 bit signed range into Int56");
+            }
+        }
+
+        operator std::int64_t() const
+        {
+            return value;
+        }
     };
 
     struct UInt24
     {
         std::uint32_t value;
+
+        UInt24(std::uint32_t v) : value(v)
+        {
+            if (v > pow(2, 24)-1){
+                throw std::out_of_range("Can not convert uint32_t value exceeding 24 bit unsigned range into UInt24");
+            }
+        }
+
+        operator std::uint32_t() const
+        {
+            return value;
+        }
     };
 
     struct UInt40
     {
         std::uint64_t value;
+
+        UInt40(std::uint64_t v) : value(v)
+        {
+            if (v > pow(2, 40)-1){
+                throw std::out_of_range("Can not convert uint64_t value exceeding 40 bit unsigned range into UInt40");
+            }
+        }
+
+        operator std::uint64_t() const
+        {
+            return value;
+        }
     };
 
     struct UInt48
     {
         std::uint64_t value;
+
+        UInt48(std::uint64_t v) : value(v)
+        {
+            if (v > pow(2, 48)-1){
+                throw std::out_of_range("Can not convert uint64_t value exceeding 48 bit unsigned range into UInt48");
+            }
+        }
+
+        operator std::uint64_t() const
+        {
+            return value;
+        }
     };
 
     struct UInt56
     {
         std::uint64_t value;
+
+        UInt56(std::uint64_t v) : value(v)
+        {
+            if (v > pow(2, 56)-1){
+                throw std::out_of_range("Can not convert uint64_t value exceeding 56 bit unsigned range into UInt56");
+            }
+        }
+
+        operator std::uint64_t() const
+        {
+            return value;
+        }
     };
 
     struct Guid
     {
         std::array<std::uint8_t, 16> bytes;
+
+        Guid(std::array<std::uint8_t, 16> b) : bytes(b){};
+        Guid() = default;
+
+        operator std::array<std::uint8_t, 16>() const
+        {
+            return bytes;
+        }
     };
+
+
+    // IEC 61131-3 data types
+    using BOOL  = bool;
+
+    using SINT  = std::int8_t;
+    using INT   = std::int16_t;
+    using DINT  = std::int32_t;
+    using LINT  = std::int64_t;
+
+    using USINT = std::uint8_t;
+    using UINT  = std::uint16_t;
+    using UDINT = std::uint32_t;
+    using ULINT = std::uint64_t;
+
+    using REAL  = float;
+    using LREAL = double;
+
+    using BYTE  = std::uint8_t;
+    using WORD  = std::uint16_t;
+    using DWORD = std::uint32_t;
+    using LWORD = std::uint64_t;
+
+    using DATE  = sdo::TimeOfDay;
+    using TIME  = sdo::TimeDifference;
+
+    // EtherCAT data types
+    using BOOLEAN = bool;
+
+    using INTEGER8  = std::int8_t;
+    using INTEGER16 = std::int16_t;
+    using INTEGER24 = sdo::Int24;
+    using INTEGER32 = std::int32_t;
+    using INTEGER40 = sdo::Int40;
+    using INTEGER48 = sdo::Int48;
+    using INTEGER56 = sdo::Int56;
+    using INTEGER64 = std::int64_t;
+
+    using UNSIGNED8  = std::uint8_t;
+    using UNSIGNED16 = std::uint16_t;
+    using UNSIGNED24 = sdo::UInt24;
+    using UNSIGNED32 = std::uint32_t;
+    using UNSIGNED40 = sdo::UInt40;
+    using UNSIGNED48 = sdo::UInt48;
+    using UNSIGNED56 = sdo::UInt56;
+    using UNSIGNED64 = std::uint64_t;
+
+    using REAL32 = float;
+    using REAL64 = double;
+
+    using TIME_OF_DAY     = sdo::TimeOfDay;
+    using TIME_DIFFERENCE = sdo::TimeDifference;
+
+    using GUID   = sdo::Guid;
+    using DOMAIN = std::vector<std::uint8_t>;
 
 
     // ---DESERIALIZATION---
@@ -500,8 +659,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int24>(const Int24& value)
     {
-        if (value.value < -pow(2, 23) || value.value > pow(2, 23)-1)
-        {
+        if (value.value < -pow(2, 23) || value.value > pow(2, 23)-1){
             throw std::out_of_range("Int24 value exceeds 24 bit signed range");
         }
 
@@ -512,8 +670,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int40>(const Int40& value)
     {
-        if (value.value < -pow(2, 39) || value.value > pow(2, 39)-1)
-        {
+        if (value.value < -pow(2, 39) || value.value > pow(2, 39)-1){
             throw std::out_of_range("Int40 value exceeds 40 bit signed range");
         }
 
@@ -524,8 +681,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int48>(const Int48& value)
     {
-        if (value.value < -pow(2, 47) || value.value > pow(2, 47)-1)
-        {
+        if (value.value < -pow(2, 47) || value.value > pow(2, 47)-1){
             throw std::out_of_range("Int48 value exceeds 48 bit signed range");
         }
 
@@ -536,8 +692,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<Int56>(const Int56& value)
     {
-        if (value.value < -pow(2, 55) || value.value > pow(2, 55)-1)
-        {
+        if (value.value < -pow(2, 55) || value.value > pow(2, 55)-1){
             throw std::out_of_range("Int56 value exceeds 56 bit signed range");
         }
 
@@ -555,8 +710,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt24>(const UInt24& value)
     {
-        if (value.value > pow(2, 24)-1)
-        {
+        if (value.value > pow(2, 24)-1){
             throw std::out_of_range("UInt24 value exceeds 24 bit unsigned range");
         }
 
@@ -565,8 +719,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt40>(const UInt40& value)
     {
-        if (value.value > pow(2, 40)-1)
-        {
+        if (value.value > pow(2, 40)-1){
             throw std::out_of_range("UInt40 value exceeds 40 bit unsigned range");
         }
 
@@ -575,8 +728,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt48>(const UInt48& value)
     {
-        if (value.value > pow(2, 48)-1)
-        {
+        if (value.value > pow(2, 48)-1){
             throw std::out_of_range("UInt48 value exceeds 48 bit unsigned range");
         }
 
@@ -585,8 +737,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline std::vector<std::uint8_t> serialize<UInt56>(const UInt56& value)
     {
-        if (value.value > pow(2, 56)-1)
-        {
+        if (value.value > pow(2, 56)-1){
             throw std::out_of_range("UInt56 value exceeds 56 bit unsigned range");
         }
 
