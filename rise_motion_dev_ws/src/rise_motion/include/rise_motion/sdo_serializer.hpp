@@ -11,66 +11,6 @@
 #include <cstddef>
 #include <cmath>
 
-
-namespace sdo::helpers
-{
-    template <typename> inline constexpr bool always_false = false;
-
-    inline void check_size(const std::vector<std::uint8_t>& blob, std::size_t expectedSize, const char* type)
-    {
-        if (blob.size() != expectedSize){
-            throw std::invalid_argument(std::string("deserialize<") + type + ">: expected " + 
-                std::to_string(expectedSize) + " bytes, got " + std::to_string(blob.size()));
-        }
-    }
-
-    template <typename T> [[nodiscard]] inline T to_raw(
-        const std::vector<std::uint8_t>& blob, std::size_t numBytes, std::size_t offset = 0)
-    {
-        static_assert(std::is_unsigned_v<T>, "to_raw<T>: T must be unsigned");
-        static_assert(sizeof(T) <= sizeof(std::uint64_t), "to_raw<T>: T can be max uint64_t");
-
-        if (numBytes > sizeof(T))
-        {
-            throw std::invalid_argument("to_raw<T>: numBytes does not fit T");
-        }
-
-        if (offset + numBytes > blob.size())
-        {
-            throw std::out_of_range("to_raw<T>: blob has less bytes than numBytes");
-        }
-
-        T raw = 0;
-
-        for (std::size_t i = 0; i < numBytes; ++i)
-        {
-            raw |= static_cast<T>(blob[offset + i]) << (8 * i);
-        }
-
-        return raw;
-    }
-
-    template <typename T> [[nodiscard]] inline std::vector<std::uint8_t> from_raw(const T& raw, std::size_t numBytes)
-    {
-        static_assert(std::is_unsigned_v<T>, "from_raw<T>: T must be unsigned");
-
-        if (numBytes > sizeof(T))
-        {
-            throw std::invalid_argument("from_raw<T>: numBytes does not fit T");
-        }
-
-        std::vector<std::uint8_t> blob;
-        blob.reserve(numBytes);
-
-        for (std::size_t i = 0; i < numBytes; ++i)
-        {
-            blob.push_back(static_cast<std::uint8_t>((raw >> (8 * i)) & 0xFF));
-        }
-
-        return blob;
-    }
-}
-
 namespace sdo
 {
     // as equivalent of the EtherCAT TIME_OF_DAY data type
@@ -236,6 +176,25 @@ namespace sdo
         }
     };
 
+    template <std::size_t T> struct STRING
+    {
+        std::string value;
+
+        STRING() = default;
+
+        STRING(std::string v) : value(std::move(v))
+        {
+            if (value.size() > T){
+                throw std::out_of_range("STRING<T>: string is too long to be coverted to STRING<T> of size T");
+            }
+        };
+
+        operator std::string() const
+        {
+            return value;
+        }
+    };
+
 
     // IEC 61131-3 data types
     using BOOL  = bool;
@@ -290,13 +249,105 @@ namespace sdo
 
     using GUID   = sdo::Guid;
     using DOMAIN = std::vector<std::uint8_t>;
+}
 
 
+namespace sdo::helpers
+{
+    template <typename> inline constexpr bool always_false = false;
+
+    template <typename T> struct is_string_type : std::false_type {};
+    template <std::size_t T> struct is_string_type<sdo::STRING<T>> : std::true_type {};
+
+    template <typename T> struct string_size;
+    template <std::size_t T> struct string_size<sdo::STRING<T>>
+    {
+        static constexpr std::size_t size = T;
+    };
+
+    inline void check_size(const std::vector<std::uint8_t>& blob, std::size_t expectedSize, const char* type)
+    {
+        if (blob.size() != expectedSize){
+            throw std::invalid_argument(std::string("deserialize<") + type + ">: expected " + 
+                std::to_string(expectedSize) + " bytes, got " + std::to_string(blob.size()));
+        }
+    }
+
+    template <typename T> [[nodiscard]] inline T to_raw(
+        const std::vector<std::uint8_t>& blob, std::size_t numBytes, std::size_t offset = 0)
+    {
+        static_assert(std::is_unsigned_v<T>, "to_raw<T>: T must be unsigned");
+        static_assert(sizeof(T) <= sizeof(std::uint64_t), "to_raw<T>: T can be max uint64_t");
+
+        if (numBytes > sizeof(T))
+        {
+            throw std::invalid_argument("to_raw<T>: numBytes does not fit T");
+        }
+
+        if (offset + numBytes > blob.size())
+        {
+            throw std::out_of_range("to_raw<T>: blob has less bytes than numBytes");
+        }
+
+        T raw = 0;
+
+        for (std::size_t i = 0; i < numBytes; ++i)
+        {
+            raw |= static_cast<T>(blob[offset + i]) << (8 * i);
+        }
+
+        return raw;
+    }
+
+    template <typename T> [[nodiscard]] inline std::vector<std::uint8_t> from_raw(const T& raw, std::size_t numBytes)
+    {
+        static_assert(std::is_unsigned_v<T>, "from_raw<T>: T must be unsigned");
+
+        if (numBytes > sizeof(T))
+        {
+            throw std::invalid_argument("from_raw<T>: numBytes does not fit T");
+        }
+
+        std::vector<std::uint8_t> blob;
+        blob.reserve(numBytes);
+
+        for (std::size_t i = 0; i < numBytes; ++i)
+        {
+            blob.push_back(static_cast<std::uint8_t>((raw >> (8 * i)) & 0xFF));
+        }
+
+        return blob;
+    }
+}
+
+namespace sdo
+{
     // ---DESERIALIZATION---
 
-    template <typename T> T deserialize(const std::vector<std::uint8_t>&)
+    template <typename T> T deserialize(const std::vector<std::uint8_t>& blob)
     {
-        static_assert(sdo::helpers::always_false<T>, "deserialize<T>: unsupported type");
+        if constexpr (sdo::helpers::is_string_type<std::remove_cv_t<std::remove_reference_t<T>>>::value){
+            
+            constexpr std::size_t size = sdo::helpers::string_size<T>::size;
+
+            if (blob.size() > size){
+                throw std::invalid_argument("deserialize<STRING<T>>: blob is larger than the expected size T");
+            }
+
+            T string{};
+
+            string.value.assign(blob.begin(), blob.end());
+
+            // strip padding zeros
+            while (!string.value.empty() && string.value.back() == '\0'){
+                string.value.pop_back();
+            }
+
+            return string;
+        }
+        else{
+            static_assert(sdo::helpers::always_false<T>, "deserialize<T>: unsupported type");
+        }
     }
 
     // -Boolean-
@@ -546,7 +597,22 @@ namespace sdo
 
     template <typename T> std::vector<std::uint8_t> serialize(const T& value)
     {
-        static_assert(sdo::helpers::always_false<T>, "serialize<T>: unsupported type");
+        if constexpr (sdo::helpers::is_string_type<std::remove_cv_t<std::remove_reference_t<T>>>::value){
+
+            constexpr std::size_t size = sdo::helpers::string_size<T>::size;
+
+            if (value.value.size() > size){
+                throw std::out_of_range("serialize<STRING<T>>: string is longer than size T");
+            }
+
+            std::vector<std::uint8_t> blob(value.value.begin(), value.value.end());
+            blob.resize(size, '\0');
+
+            return blob;
+        }
+        else{
+            static_assert(sdo::helpers::always_false<T>, "serialize<T>: unsupported type");
+        }
         return{};
     }
 
