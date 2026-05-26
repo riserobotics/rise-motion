@@ -75,7 +75,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_sdo_serializer
     test/test_sdo_serializer.cpp
   )
-  ament_add_pytest_test(test_sdo_serializer 
+  ament_add_pytest_test(test_sdo_serializer_python 
     test/test_sdo_serializer.py
   )
   if(TARGET test_sdo_serializer)
