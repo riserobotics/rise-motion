@@ -57,24 +57,24 @@ BASE_DATA_TYPES: Dict[int, TypeInfo] = {
     0x002F: TypeInfo(0x002F, "BITARR32", "BITARR32", 32, "serialize_bitn", "deserialize_bitn"),
 
     # Signed integers 
-    0x0002: TypeInfo(0x0002, "INTEGER8",  "SINT",  8,  "serialize_int8",  "deserialize_int8"),
-    0x0003: TypeInfo(0x0003, "INTEGER16", "INT",   16, "serialize_int16", "deserialize_int16"),
-    0x0010: TypeInfo(0x0010, "INTEGER24", "INT24", 24, "serialize_intn",  "deserialize_intn"),
-    0x0004: TypeInfo(0x0004, "INTEGER32", "DINT",  32, "serialize_int32", "deserialize_int32"),
-    0x0012: TypeInfo(0x0012, "INTEGER40", "INT40", 40, "serialize_intn",  "deserialize_intn"),
-    0x0013: TypeInfo(0x0013, "INTEGER48", "INT48", 48, "serialize_intn",  "deserialize_intn"),
-    0x0014: TypeInfo(0x0014, "INTEGER56", "INT56", 56, "serialize_intn",  "deserialize_intn"),
-    0x0015: TypeInfo(0x0015, "INTEGER64", "LINT",  64, "serialize_int64", "deserialize_int64"),
+    0x0002: TypeInfo(0x0002, "INTEGER8",  "SINT",  8,  "serialize_int",  "deserialize_int"),
+    0x0003: TypeInfo(0x0003, "INTEGER16", "INT",   16, "serialize_int", "deserialize_int"),
+    0x0010: TypeInfo(0x0010, "INTEGER24", "INT24", 24, "serialize_int",  "deserialize_int"),
+    0x0004: TypeInfo(0x0004, "INTEGER32", "DINT",  32, "serialize_int", "deserialize_int"),
+    0x0012: TypeInfo(0x0012, "INTEGER40", "INT40", 40, "serialize_int",  "deserialize_int"),
+    0x0013: TypeInfo(0x0013, "INTEGER48", "INT48", 48, "serialize_int",  "deserialize_int"),
+    0x0014: TypeInfo(0x0014, "INTEGER56", "INT56", 56, "serialize_int",  "deserialize_int"),
+    0x0015: TypeInfo(0x0015, "INTEGER64", "LINT",  64, "serialize_int", "deserialize_int"),
 
     # Unsigned integers 
-    0x0005: TypeInfo(0x0005, "UNSIGNED8",  "USINT",  8,  "serialize_uint8",  "deserialize_uint8"),
-    0x0006: TypeInfo(0x0006, "UNSIGNED16", "UINT",   16, "serialize_uint16", "deserialize_uint16"),
-    0x0016: TypeInfo(0x0016, "UNSIGNED24", "UINT24", 24, "serialize_uintn",  "deserialize_uintn"),  # ← comma was missing in source
-    0x0007: TypeInfo(0x0007, "UNSIGNED32", "UDINT",  32, "serialize_uint32", "deserialize_uint32"),
-    0x0018: TypeInfo(0x0018, "UNSIGNED40", "UINT40", 40, "serialize_uintn",  "deserialize_uintn"),
-    0x0019: TypeInfo(0x0019, "UNSIGNED48", "UINT48", 48, "serialize_uintn",  "deserialize_uintn"),
-    0x001A: TypeInfo(0x001A, "UNSIGNED56", "UINT56", 56, "serialize_uintn",  "deserialize_uintn"),
-    0x001B: TypeInfo(0x001B, "UNSIGNED64", "ULINT",  64, "serialize_uint64", "deserialize_uint64"),
+    0x0005: TypeInfo(0x0005, "UNSIGNED8",  "USINT",  8,  "serialize_int",  "deserialize_int"),
+    0x0006: TypeInfo(0x0006, "UNSIGNED16", "UINT",   16, "serialize_int", "deserialize_int"),
+    0x0016: TypeInfo(0x0016, "UNSIGNED24", "UINT24", 24, "serialize_int",  "deserialize_int"),
+    0x0007: TypeInfo(0x0007, "UNSIGNED32", "UDINT",  32, "serialize_int", "deserialize_int"),
+    0x0018: TypeInfo(0x0018, "UNSIGNED40", "UINT40", 40, "serialize_int",  "deserialize_int"),
+    0x0019: TypeInfo(0x0019, "UNSIGNED48", "UINT48", 48, "serialize_int",  "deserialize_int"),
+    0x001A: TypeInfo(0x001A, "UNSIGNED56", "UINT56", 56, "serialize_int",  "deserialize_int"),
+    0x001B: TypeInfo(0x001B, "UNSIGNED64", "ULINT",  64, "serialize_int", "deserialize_int"),
 
     # Floating point 
     0x0008: TypeInfo(0x0008, "REAL32", "REAL",  32, "serialize_float32", "deserialize_float32"),
@@ -163,6 +163,9 @@ def deserialize(
     if type(serialized_value) is not bytes:
         raise TypeError("serialized_value should be bytes object")
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
+    if (object_info.bit_size + 7) // 8 != len(serialized_value):
+        raise ValueError(
+            "number of bytes needed to contain object_info.bit_size must be equal to serialized_value length")
     # using the specific function for this data type which is stored in the almighty dict
     return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)
 
@@ -187,16 +190,29 @@ def serialize_bitn(val, bit_s: int) -> bytes:
 
     return vali.to_bytes(byte_len, byteorder="little")
 
-def deserialize_bitn(ser_val, bit_s):
+def deserialize_bitn(ser_val: bytes, bit_s):
     """
     Deserialize a bytes object into a bit-string.
     """
-
-    if (bit_s + 7) // 8 != len(ser_val):
-        raise ValueError(
-            "number of bytes needed to contain bit_s must be equal to ser_val length")
 
     value = int.from_bytes(ser_val, byteorder='little')
     bit_string = bin(value)[2:]
     bit_string = bit_string.zfill(bit_s)
     return bit_string
+
+def serialize_int(val: int, bit_s: int) -> bytes:
+    """
+    Serialize an int into a bytes object.
+    """
+
+    # Number of bytes required
+    byte_len = (bit_s + 7) // 8
+
+    return val.to_bytes(byte_len, byteorder="little", signed=True)
+
+def deserialize_int(ser_val: bytes, bit_s):
+    """
+    Deserialize a bytes object into an int.
+    """
+    
+    return int.from_bytes(ser_val, byteorder='little', signed=True)
