@@ -172,40 +172,32 @@ def deserialize(
 # ---------------------------------------------------------------------------
 
 # TODO: could add support for other ways to pass bits than strings
-def serialize_bitn(val: str, bit_s: int) -> bytes:
+def serialize_bitn(val, bit_s: int) -> bytes:
     """
     Serialize a bit-string into a bytes object.
     """
-    if not (1 <= len(val) <= 16):
-        raise ValueError("val length must be between 1 and 16 bits")
-
-    if any(c not in "01" for c in val):
-        raise ValueError("val must contain only '0' and '1'")
-
-    if bit_s != len(val):
-        raise ValueError("bit_s must be equal to val length")
-
-    # TODO: test if left-pad with zeroes lines up with how SOEM inserts or retreives the string
-    # Left-pad with zeros to requested bit width
-    padded = val.zfill(bit_s)
-
-    # Convert to integer
-    n = int(padded, 2)
+    if type(val) is str:
+        vali = int(val, 2)
+    elif type(val) is int:
+        vali = val
+    else:
+        raise TypeError(f"val length must be either int or str, not {type(val)}")
 
     # Number of bytes required
     byte_len = (bit_s + 7) // 8
 
-    return n.to_bytes(byte_len, byteorder="big")
+    return vali.to_bytes(byte_len, byteorder="little")
 
 def deserialize_bitn(ser_val, bit_s):
     """
     Deserialize a bytes object into a bit-string.
     """
-    if not (1 <= len(ser_val)*8 <= 16):
-        raise ValueError("val length must be between 1 and 16 bits")
 
     if (bit_s + 7) // 8 != len(ser_val):
         raise ValueError(
             "number of bytes needed to contain bit_s must be equal to ser_val length")
 
-    return ''.join(format(byte, '08b') for byte in ser_val)
+    value = int.from_bytes(ser_val, byteorder='little')
+    bit_string = bin(value)[2:]
+    bit_string = bit_string.zfill(bit_s)
+    return bit_string
