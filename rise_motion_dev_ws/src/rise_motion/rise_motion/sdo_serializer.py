@@ -67,14 +67,14 @@ BASE_DATA_TYPES: Dict[int, TypeInfo] = {
     0x0015: TypeInfo(0x0015, "INTEGER64", "LINT",  64, "serialize_int", "deserialize_int"),
 
     # Unsigned integers 
-    0x0005: TypeInfo(0x0005, "UNSIGNED8",  "USINT",  8,  "serialize_int",  "deserialize_int"),
-    0x0006: TypeInfo(0x0006, "UNSIGNED16", "UINT",   16, "serialize_int", "deserialize_int"),
-    0x0016: TypeInfo(0x0016, "UNSIGNED24", "UINT24", 24, "serialize_int",  "deserialize_int"),
-    0x0007: TypeInfo(0x0007, "UNSIGNED32", "UDINT",  32, "serialize_int", "deserialize_int"),
-    0x0018: TypeInfo(0x0018, "UNSIGNED40", "UINT40", 40, "serialize_int",  "deserialize_int"),
-    0x0019: TypeInfo(0x0019, "UNSIGNED48", "UINT48", 48, "serialize_int",  "deserialize_int"),
-    0x001A: TypeInfo(0x001A, "UNSIGNED56", "UINT56", 56, "serialize_int",  "deserialize_int"),
-    0x001B: TypeInfo(0x001B, "UNSIGNED64", "ULINT",  64, "serialize_int", "deserialize_int"),
+    0x0005: TypeInfo(0x0005, "UNSIGNED8",  "USINT",  8,  "serialize_uint",  "deserialize_uint"),
+    0x0006: TypeInfo(0x0006, "UNSIGNED16", "UINT",   16, "serialize_uint", "deserialize_uint"),
+    0x0016: TypeInfo(0x0016, "UNSIGNED24", "UINT24", 24, "serialize_uint",  "deserialize_uint"),
+    0x0007: TypeInfo(0x0007, "UNSIGNED32", "UDINT",  32, "serialize_uint", "deserialize_uint"),
+    0x0018: TypeInfo(0x0018, "UNSIGNED40", "UINT40", 40, "serialize_uint",  "deserialize_uint"),
+    0x0019: TypeInfo(0x0019, "UNSIGNED48", "UINT48", 48, "serialize_uint",  "deserialize_uint"),
+    0x001A: TypeInfo(0x001A, "UNSIGNED56", "UINT56", 56, "serialize_uint",  "deserialize_uint"),
+    0x001B: TypeInfo(0x001B, "UNSIGNED64", "ULINT",  64, "serialize_uint", "deserialize_uint"),
 
     # Floating point 
     0x0008: TypeInfo(0x0008, "REAL32", "REAL",  32, "serialize_float32", "deserialize_float32"),
@@ -216,3 +216,20 @@ def deserialize_int(ser_val: bytes, bit_s):
     """
     
     return int.from_bytes(ser_val, byteorder='little', signed=True)
+
+def serialize_uint(val: int, bit_s: int) -> bytes:
+    """
+    Serialize a uint into a bytes object.
+    """
+
+    # Number of bytes required
+    byte_len = (bit_s + 7) // 8
+
+    return val.to_bytes(byte_len, byteorder="little")
+
+def deserialize_uint(ser_val: bytes, bit_s):
+    """
+    Deserialize a bytes object into a uint.
+    """
+    
+    return int.from_bytes(ser_val, byteorder='little')
