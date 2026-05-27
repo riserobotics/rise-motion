@@ -33,7 +33,7 @@ BASE_DATA_TYPES: Dict[int, TypeInfo] = {
     0x000C: TypeInfo(0x000C, "TIME_OF_DAY",    "TIME_OF_DAY",    48, "serialize_time48",  "deserialize_time48"),
     0x000D: TypeInfo(0x000D, "TIME_DIFFERENCE","TIME_DIFFERENCE", 48, "serialize_time48",  "deserialize_time48"),
 
-    # Bit strings BIT1 – BIT16 
+    # Bit strings BIT1 - BIT16 
     0x0030: TypeInfo(0x0030, "BIT1",  "BIT1",   1,  "serialize_bitn", "deserialize_bitn"),
     0x0031: TypeInfo(0x0031, "BIT2",  "BIT2",   2,  "serialize_bitn", "deserialize_bitn"),
     0x0032: TypeInfo(0x0032, "BIT3",  "BIT3",   3,  "serialize_bitn", "deserialize_bitn"),
@@ -52,9 +52,9 @@ BASE_DATA_TYPES: Dict[int, TypeInfo] = {
     0x003F: TypeInfo(0x003F, "BIT16", "BIT16",  16, "serialize_bitn", "deserialize_bitn"),
 
     # Bit arrays 
-    0x002D: TypeInfo(0x002D, "BITARR8",  "BITARR8",  8,  "serialize_bitarr8",  "deserialize_bitarr8"),
-    0x002E: TypeInfo(0x002E, "BITARR16", "BITARR16", 16, "serialize_bitarr16", "deserialize_bitarr16"),
-    0x002F: TypeInfo(0x002F, "BITARR32", "BITARR32", 32, "serialize_bitarr32", "deserialize_bitarr32"),
+    0x002D: TypeInfo(0x002D, "BITARR8",  "BITARR8",  8,  "serialize_bitn",  "deserialize_bitn"),
+    0x002E: TypeInfo(0x002E, "BITARR16", "BITARR16", 16, "serialize_bitn", "deserialize_bitn"),
+    0x002F: TypeInfo(0x002F, "BITARR32", "BITARR32", 32, "serialize_bitn", "deserialize_bitn"),
 
     # Signed integers 
     0x0002: TypeInfo(0x0002, "INTEGER8",  "SINT",  8,  "serialize_int8",  "deserialize_int8"),
@@ -171,7 +171,6 @@ def deserialize(
 # Specific functions (called by generic functions)
 # ---------------------------------------------------------------------------
 
-# TODO: could add support for other ways to pass bits than strings
 def serialize_bitn(val, bit_s: int) -> bytes:
     """
     Serialize a bit-string into a bytes object.
