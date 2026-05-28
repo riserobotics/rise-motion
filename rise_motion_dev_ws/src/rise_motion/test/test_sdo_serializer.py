@@ -10,7 +10,7 @@ from rise_motion.sdo_serializer import serialize, deserialize
 # --- round-trip tests ---
 
 @pytest.mark.parametrize("bit_width", range(1, 17))
-def test_roundtrip_random(bit_width: int):
+def test_roundtrip_random_bitstrings(bit_width: int):
     """Serializing then deserializing a random valid value returns the original."""
     max_val = (1 << bit_width) - 1
     value = format(random.randint(0, max_val), f"0{bit_width}b")
@@ -19,7 +19,7 @@ def test_roundtrip_random(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", range(1, 17))
-def test_roundtrip_min(bit_width: int):
+def test_roundtrip_min_bitstrings(bit_width: int):
     """Zero survives a round-trip for every bit width."""
     value = "0".zfill(bit_width)
     dtype = f"BIT{bit_width}"
@@ -27,7 +27,7 @@ def test_roundtrip_min(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", range(1, 17))
-def test_roundtrip_max(bit_width: int):
+def test_roundtrip_max_bitstrings(bit_width: int):
     """All-ones value survives a round-trip for every bit width."""
     value = "1" * bit_width
     dtype = f"BIT{bit_width}"
@@ -45,7 +45,7 @@ def test_roundtrip_max(bit_width: int):
     ("0000000000000000", "BIT16", b"\x00\x00"),
     ("1000000000000000", "BIT16", b"\x00\x80"),  # MSB only
 ])
-def test_serialize_known_values(value: str, dtype: str, expected_bytes: bytes):
+def test_serialize_known_values_bitstrings(value: str, dtype: str, expected_bytes: bytes):
     assert expected_bytes == serialize(value, base_data_type=dtype)
 
 
@@ -59,38 +59,41 @@ def test_serialize_known_values(value: str, dtype: str, expected_bytes: bytes):
     (b"\xff\xff", "BIT16", "1111111111111111"),
     (b"\x00\x00", "BIT16", "0000000000000000"),
 ])
-def test_deserialize_known_values(raw_bytes: bytes, dtype: str, expected_value: str):
+def test_deserialize_known_values_bitstrings(raw_bytes: bytes, dtype: str, expected_value: str):
     assert expected_value == deserialize(raw_bytes, base_data_type=dtype)
 
 
 # ---------------------------------------------------------------------------
-# Bit arrays BITARR8, BITARR16, BITARR32 tests
+# BITARR8, BITARR16, BITARR32, BYTE, WORD, DWORD tests
 # ---------------------------------------------------------------------------
 
 # --- round-trip tests ---
 
-@pytest.mark.parametrize("bit_width", [8, 16, 32])
-def test_roundtrip_random(bit_width: int):
+@pytest.mark.parametrize("bit_width, dtype", [
+    (8, "BITARR8"),(16, "BITARR16"),(32, "BITARR32"),
+    (8, "BYTE"),(16, "WORD"),(32, "DWORD")])
+def test_roundtrip_random_bitarr_word(bit_width: int, dtype: str):
     """Serializing then deserializing a random valid value returns the original."""
     max_val = (1 << bit_width) - 1
     value = format(random.randint(0, max_val), f"0{bit_width}b")
-    dtype = f"BITARR{bit_width}"
     assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
 
 
-@pytest.mark.parametrize("bit_width", [8, 16, 32])
-def test_roundtrip_min(bit_width: int):
+@pytest.mark.parametrize("bit_width, dtype", [
+    (8, "BITARR8"),(16, "BITARR16"),(32, "BITARR32"),
+    (8, "BYTE"),(16, "WORD"),(32, "DWORD")])
+def test_roundtrip_min_bitarr_word(bit_width: int, dtype: str):
     """Zero survives a round-trip for every bit width."""
     value = "0".zfill(bit_width)
-    dtype = f"BITARR{bit_width}"
     assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
 
 
-@pytest.mark.parametrize("bit_width", [8, 16, 32])
-def test_roundtrip_max(bit_width: int):
+@pytest.mark.parametrize("bit_width, dtype", [
+    (8, "BITARR8"),(16, "BITARR16"),(32, "BITARR32"),
+    (8, "BYTE"),(16, "WORD"),(32, "DWORD")])
+def test_roundtrip_max_bitarr_word(bit_width: int, dtype: str):
     """All-ones value survives a round-trip for every bit width."""
     value = "1" * bit_width
-    dtype = f"BITARR{bit_width}"
     assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
 
 
@@ -103,8 +106,14 @@ def test_roundtrip_max(bit_width: int):
     ("0011110000101110",                 "BITARR16", b"\x2e\x3c"),
     ("10010000111100001010101001101101", "BITARR32", b"\x6d\xaa\xf0\x90"),
     ("01101111000101011000001111110000", "BITARR32", b"\xf0\x83\x15\x6f"),
+    ("10101100",                         "BYTE",     b"\xac"),
+    ("01010101",                         "BYTE",     b"\x55"),
+    ("1100101001110001",                 "WORD",     b"\x71\xca"),
+    ("0011110000101110",                 "WORD",     b"\x2e\x3c"),
+    ("10010000111100001010101001101101", "DWORD",    b"\x6d\xaa\xf0\x90"),
+    ("01101111000101011000001111110000", "DWORD",    b"\xf0\x83\x15\x6f"),
 ])
-def test_serialize_known_values(value: str, dtype: str, expected_bytes: bytes):
+def test_serialize_known_values_bitarr_word(value: str, dtype: str, expected_bytes: bytes):
     assert expected_bytes == serialize(value, base_data_type=dtype)
 
 
@@ -117,10 +126,22 @@ def test_serialize_known_values(value: str, dtype: str, expected_bytes: bytes):
     ("0011110000101110",                 "BITARR16", b"\x2e\x3c"),
     ("10010000111100001010101001101101", "BITARR32", b"\x6d\xaa\xf0\x90"),
     ("01101111000101011000001111110000", "BITARR32", b"\xf0\x83\x15\x6f"),
+    ("10101100",                         "BYTE",     b"\xac"),
+    ("01010101",                         "BYTE",     b"\x55"),
+    ("1100101001110001",                 "WORD",     b"\x71\xca"),
+    ("0011110000101110",                 "WORD",     b"\x2e\x3c"),
+    ("10010000111100001010101001101101", "DWORD",    b"\x6d\xaa\xf0\x90"),
+    ("01101111000101011000001111110000", "DWORD",    b"\xf0\x83\x15\x6f"),
 ])
-def test_deserialize_known_values(raw_bytes: bytes, dtype: str, expected_value: str):
+def test_deserialize_known_values_bitarr_word(raw_bytes: bytes, dtype: str, expected_value: str):
     assert expected_value == deserialize(raw_bytes, base_data_type=dtype)
 
+# --- bytes passthrough test for serializing BYTE ---
+
+def test_serializing_byte_passthrough():
+    """Serializing a bytes object should return the same bytes object."""
+    value = serialize(random.randint(0, (1 << 8)-1), name="UNSIGNED8")
+    assert value == serialize(value, name="BYTE")
 
 # ---------------------------------------------------------------------------
 # Signed integers 8, 16, 24, 32, 40, 48, 56, 64 tests
@@ -132,7 +153,7 @@ def test_deserialize_known_values(raw_bytes: bytes, dtype: str, expected_value: 
 # --- round-trip tests ---
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_random(bit_width: int):
+def test_roundtrip_random_sint(bit_width: int):
     """Serializing then deserializing a random valid value returns the original."""
     max_val = 1 << (bit_width-1)
     value = random.randint(-max_val, (max_val-1))
@@ -141,7 +162,7 @@ def test_roundtrip_random(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_min(bit_width: int):
+def test_roundtrip_min_sint(bit_width: int):
     """Zero survives a round-trip for every integer size."""
     value = 0
     dtype = f"INTEGER{bit_width}"
@@ -149,7 +170,7 @@ def test_roundtrip_min(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_max(bit_width: int):
+def test_roundtrip_max_sint(bit_width: int):
     """max-value survives a round-trip for every integer size."""
     max_val = 1 << (bit_width-1)
     value = max_val-1
@@ -158,7 +179,7 @@ def test_roundtrip_max(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_max(bit_width: int):
+def test_roundtrip_max_sint(bit_width: int):
     """min-value survives a round-trip for every integer size."""
     max_val = 1 << (bit_width-1)
     value = -max_val
@@ -178,7 +199,7 @@ def test_roundtrip_max(bit_width: int):
     (-(1 << 40),  "INTEGER56",  b"\x00\x00\x00\x00\x00\xff\xff"),
     ((1 << 62),   "INTEGER64",  b"\x00\x00\x00\x00\x00\x00\x00\x40"),
 ])
-def test_serialize_known_values(value: str, dtype: str, expected_bytes: bytes):
+def test_serialize_known_values_sint(value: str, dtype: str, expected_bytes: bytes):
     assert expected_bytes == serialize(value, name=dtype)
 
 
@@ -194,7 +215,7 @@ def test_serialize_known_values(value: str, dtype: str, expected_bytes: bytes):
     (-(1 << 40),  "INTEGER56",  b"\x00\x00\x00\x00\x00\xff\xff"),
     ((1 << 62),   "INTEGER64",  b"\x00\x00\x00\x00\x00\x00\x00\x40"),
 ])
-def test_deserialize_known_values(raw_bytes: bytes, dtype: str, expected_value: str):
+def test_deserialize_known_values_sint(raw_bytes: bytes, dtype: str, expected_value: str):
     assert expected_value == deserialize(raw_bytes, name=dtype)
 
 
@@ -205,7 +226,7 @@ def test_deserialize_known_values(raw_bytes: bytes, dtype: str, expected_value: 
 # --- round-trip tests ---
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_random(bit_width: int):
+def test_roundtrip_random_uint(bit_width: int):
     """Serializing then deserializing a random valid value returns the original."""
     max_val = (1 << bit_width)-1
     value = random.randint(0, max_val)
@@ -214,7 +235,7 @@ def test_roundtrip_random(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_min(bit_width: int):
+def test_roundtrip_min_uint(bit_width: int):
     """Zero survives a round-trip for every unsigned integer size."""
     value = 0
     dtype = f"UNSIGNED{bit_width}"
@@ -222,9 +243,45 @@ def test_roundtrip_min(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_max(bit_width: int):
+def test_roundtrip_max_uint(bit_width: int):
     """max-value survives a round-trip for every unsigned integer size."""
     max_val = (1 << bit_width)-1
     value = max_val
     dtype = f"UNSIGNED{bit_width}"
     assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+   
+# ---------------------------------------------------------------------------
+# Bool tests
+# ---------------------------------------------------------------------------
+
+# --- round-trip test ---
+
+def test_roundtrip_random_bool():
+    """Serializing then deserializing a random valid value returns the original."""
+    value = random.choice([True, False, 1, 0])
+    assert value == deserialize(serialize(value, base_data_type="BOOL"), base_data_type="BOOL")
+
+
+# --- Explicit serialization checks (known input -> known bytes) ---
+
+@pytest.mark.parametrize("value, dtype, expected_bytes", [
+    (False, "BOOL", b"\x00"),
+    (True,  "BOOL", b"\x01"),
+    (0,     "BOOL", b"\x00"),
+    (1,     "BOOL", b"\x01"),
+])
+def test_serialize_known_values_bool(value: str, dtype: str, expected_bytes: bytes):
+    assert expected_bytes == serialize(value, base_data_type=dtype)
+
+
+# --- Explicit deserialization checks (known bytes -> known output) ---
+
+@pytest.mark.parametrize("expected_value, dtype, raw_bytes", [
+    (False, "BOOL", b"\x00"),
+    (True,  "BOOL", b"\x01"),
+    (0,     "BOOL", b"\x00"),
+    (1,     "BOOL", b"\x01"),
+])
+def test_deserialize_known_values_bool(raw_bytes: bytes, dtype: str, expected_value: str):
+    assert expected_value == deserialize(raw_bytes, base_data_type=dtype)

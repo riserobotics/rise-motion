@@ -25,9 +25,9 @@ BASE_DATA_TYPES: Dict[int, TypeInfo] = {
 
     # Boolean / generic word types
     0x0001: TypeInfo(0x0001, "BOOLEAN",        "BOOL",   1,   "serialize_bool",    "deserialize_bool"),
-    0x001E: TypeInfo(0x001E, "BYTE",           "BYTE",   8,   "serialize_uint8",   "deserialize_uint8"),
-    0x001F: TypeInfo(0x001F, "WORD",           "WORD",   16,  "serialize_uint16",  "deserialize_uint16"),
-    0x0020: TypeInfo(0x0020, "DWORD",          "DWORD",  32,  "serialize_uint32",  "deserialize_uint32"),
+    0x001E: TypeInfo(0x001E, "BYTE",           "BYTE",   8,   "serialize_byte",   "deserialize_bitn"),
+    0x001F: TypeInfo(0x001F, "WORD",           "WORD",   16,  "serialize_bitn",  "deserialize_bitn"),
+    0x0020: TypeInfo(0x0020, "DWORD",          "DWORD",  32,  "serialize_bitn",  "deserialize_bitn"),
 
     # Time types (48-bit, special structure) 
     0x000C: TypeInfo(0x000C, "TIME_OF_DAY",    "TIME_OF_DAY",    48, "serialize_time48",  "deserialize_time48"),
@@ -233,3 +233,28 @@ def deserialize_uint(ser_val: bytes, bit_s):
     """
     
     return int.from_bytes(ser_val, byteorder='little')
+
+def serialize_bool(val, bit_s: int) -> bytes:
+    """
+    Serialize a bool into a bytes object.
+    """
+    if type(val) is bool:
+        val = int(val)
+
+    return serialize_bitn(val, bit_s)
+
+def deserialize_bool(ser_val: bytes, bit_s):
+    """
+    Deserialize a bytes object into a bool.
+    """
+    
+    return bool(int.from_bytes(ser_val, byteorder='little'))
+
+def serialize_byte(val, bit_s: int) -> bytes:
+    """
+    Serialize a byte into a bytes object.
+    """
+    if type(val) is bytes:
+        return val
+
+    return serialize_bitn(val, bit_s)
