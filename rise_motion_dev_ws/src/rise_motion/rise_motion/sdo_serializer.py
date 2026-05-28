@@ -1,7 +1,6 @@
-from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, List
 import struct
+import uuid
 
 # ---------------------------------------------------------------------------
 # Record type
@@ -21,7 +20,7 @@ class TypeInfo:
 # Master table  (keyed by object dictionary index)
 # ---------------------------------------------------------------------------
 
-BASE_DATA_TYPES: Dict[int, TypeInfo] = {
+BASE_DATA_TYPES: dict[int, TypeInfo] = {
 
     # Boolean / generic word types
     0x0001: TypeInfo(0x0001, "BOOLEAN",        "BOOL",   1,   "serialize_bool",    "deserialize_bool"),
@@ -89,11 +88,11 @@ BASE_DATA_TYPES: Dict[int, TypeInfo] = {
 # Secondary lookup dicts  (built once at import time)
 # ---------------------------------------------------------------------------
 
-BY_NAME: Dict[str, TypeInfo] = {
+BY_NAME: dict[str, TypeInfo] = {
     info.name: info for info in BASE_DATA_TYPES.values()
 }
 
-BY_BASE_DATA_TYPE: Dict[str, TypeInfo] = {
+BY_BASE_DATA_TYPE: dict[str, TypeInfo] = {
     info.base_data_type: info for info in BASE_DATA_TYPES.values()
 }
 
@@ -148,19 +147,20 @@ def serialize(
     index: int | None = None,
     name: str | None = None,
     base_data_type: str | None = None,
-) -> List[int]:
+) -> list[int]:
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
     return globals()[object_info.serialize_fn](value, object_info.bit_size)
 
 def deserialize(
-    serialized_value: List[int],
+    serialized_value: list[int],
     *,
     index: int | None = None,
     name: str | None = None,
     base_data_type: str | None = None,
 ):
     if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
-        raise TypeError("serialized_value must be a list[int]")
+        error_msg = f"serialized_value must be a list[int] not {type(serialized_value)}"
+        raise TypeError(error_msg)
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
     if (object_info.bit_size + 7) // 8 != len(serialized_value):
         raise ValueError(
@@ -172,7 +172,7 @@ def deserialize(
 # Specific functions (called by generic functions)
 # ---------------------------------------------------------------------------
 
-def serialize_bitn(val, bit_s: int) -> List[int]:
+def serialize_bitn(val, bit_s: int) -> list[int]:
     """
     Serialize a bit-string into a list[int].
     """
@@ -186,40 +186,40 @@ def serialize_bitn(val, bit_s: int) -> List[int]:
     byte_len = (bit_s + 7) // 8
     return list(vali.to_bytes(byte_len, byteorder="little"))
 
-def deserialize_bitn(ser_val: List[int], bit_s: int) -> str:
+def deserialize_bitn(ser_val: list[int], bit_s: int) -> str:
     """
     Deserialize a list[int] into a bit-string.
     """
     value = int.from_bytes(bytes(ser_val), byteorder='little')
     return bin(value)[2:].zfill(bit_s)
 
-def serialize_int(val: int, bit_s: int) -> List[int]:
+def serialize_int(val: int, bit_s: int) -> list[int]:
     """
     Serialize a signed int into a list[int].
     """
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder="little", signed=True))
 
-def deserialize_int(ser_val: List[int], bit_s: int) -> int:
+def deserialize_int(ser_val: list[int], bit_s: int) -> int:
     """
     Deserialize a list[int] into a signed int.
     """
     return int.from_bytes(bytes(ser_val), byteorder='little', signed=True)
 
-def serialize_uint(val: int, bit_s: int) -> List[int]:
+def serialize_uint(val: int, bit_s: int) -> list[int]:
     """
     Serialize an unsigned int into a list[int].
     """
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder="little"))
 
-def deserialize_uint(ser_val: List[int], bit_s: int) -> int:
+def deserialize_uint(ser_val: list[int], bit_s: int) -> int:
     """
     Deserialize a list[int] into an unsigned int.
     """
     return int.from_bytes(bytes(ser_val), byteorder='little')
 
-def serialize_bool(val, bit_s: int) -> List[int]:
+def serialize_bool(val, bit_s: int) -> list[int]:
     """
     Serialize a bool into a list[int].
     """
@@ -227,20 +227,57 @@ def serialize_bool(val, bit_s: int) -> List[int]:
         val = int(val)
     return serialize_bitn(val, bit_s)
 
-def deserialize_bool(ser_val: List[int], bit_s: int) -> bool:
+def deserialize_bool(ser_val: list[int], bit_s: int) -> bool:
     """
     Deserialize a list[int] into a bool.
     """
     return bool(int.from_bytes(bytes(ser_val), byteorder='little'))
 
-def serialize_float(val, bit_s: int) -> List[int]:
+def serialize_float(val, bit_s: int) -> list[int]:
     """
     Serialize a float into a list[int].
     """
     return list(struct.pack(f"<{'f' if bit_s == 32 else 'd'}", val))
 
-def deserialize_float(ser_val: List[int], bit_s: int) -> float:
+def deserialize_float(ser_val: list[int], bit_s: int) -> float:
     """
     Deserialize a list[int] into a float.
     """
     return struct.unpack(f"<{'f' if bit_s == 32 else 'd'}", bytes(ser_val))[0]
+
+def serialize_time48(val, bit_s: int) -> list[int]:
+    """
+    Takes either an int or str of bits describing the whole time48 struct 
+    or a tuple containing ms and days
+    """
+    if not isinstance(val, (str, int)):
+        ms = format(val[0], '028b')   # UNSIGNED28 ms
+        void = "0000"                 # VOID4 reserved
+        days = format(val[1], '016b') # UNSIGNED16 days     
+        val = ms+void+days
+    
+    return serialize_bitn(val, bit_s)
+
+def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
+    """
+    Takes list[int] and returns a tuple containing ms and days
+    """
+    bits = deserialize_bitn(ser_val, bit_s)
+    return (int(bits[0:28], base=2), int(bits[32:48], base=2))
+
+
+def serialize_guid(val, bit_s: int) -> list[int]:
+    """
+    Serialize a UUID into a list[int].
+    Accepts a uuid.UUID object or a GUID string e.g. "550e8400-e29b-41d4-a716-446655440000".
+    """
+    if isinstance(val, str):
+        val = uuid.UUID(val)
+    return list(val.bytes_le)
+
+
+def deserialize_guid(ser_val: list[int], bit_s: int) -> uuid.UUID:
+    """
+    Deserialize a list[int] into a uuid.UUID.
+    """
+    return uuid.UUID(bytes_le=bytes(ser_val))

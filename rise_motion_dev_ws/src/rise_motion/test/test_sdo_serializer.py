@@ -1,9 +1,9 @@
 """Tests for sdo_serializer.py module."""
-import random
 import pytest
-from rise_motion.sdo_serializer import serialize, deserialize
+import random
 from math import isnan
-from typing import List
+import uuid
+from rise_motion.sdo_serializer import serialize, deserialize
 
 # ---------------------------------------------------------------------------
 # Bit strings BIT1 - BIT16 tests
@@ -47,7 +47,7 @@ def test_roundtrip_max_bitstrings(bit_width: int):
     ("0000000000000000", "BIT16", [0x00, 0x00]),
     ("1000000000000000", "BIT16", [0x00, 0x80]),  # MSB only
 ])
-def test_serialize_known_values_bitstrings(value: str, dtype: str, expected: List[int]):
+def test_serialize_known_values_bitstrings(value: str, dtype: str, expected: list[int]):
     assert expected == serialize(value, base_data_type=dtype)
 
 
@@ -61,7 +61,7 @@ def test_serialize_known_values_bitstrings(value: str, dtype: str, expected: Lis
     ([0xff, 0xff], "BIT16", "1111111111111111"),
     ([0x00, 0x00], "BIT16", "0000000000000000"),
 ])
-def test_deserialize_known_values_bitstrings(serialized: List[int], dtype: str, expected_value: str):
+def test_deserialize_known_values_bitstrings(serialized: list[int], dtype: str, expected_value: str):
     assert expected_value == deserialize(serialized, base_data_type=dtype)
 
 
@@ -115,7 +115,7 @@ def test_roundtrip_max_bitarr_word(bit_width: int, dtype: str):
     ("10010000111100001010101001101101", "DWORD",    [0x6d, 0xaa, 0xf0, 0x90]),
     ("01101111000101011000001111110000", "DWORD",    [0xf0, 0x83, 0x15, 0x6f]),
 ])
-def test_serialize_known_values_bitarr_word(value: str, dtype: str, expected: List[int]):
+def test_serialize_known_values_bitarr_word(value: str, dtype: str, expected: list[int]):
     assert expected == serialize(value, base_data_type=dtype)
 
 
@@ -135,7 +135,7 @@ def test_serialize_known_values_bitarr_word(value: str, dtype: str, expected: Li
     ([0x6d, 0xaa, 0xf0, 0x90],          "DWORD",    "10010000111100001010101001101101"),
     ([0xf0, 0x83, 0x15, 0x6f],          "DWORD",    "01101111000101011000001111110000"),
 ])
-def test_deserialize_known_values_bitarr_word(serialized: List[int], dtype: str, expected_value: str):
+def test_deserialize_known_values_bitarr_word(serialized: list[int], dtype: str, expected_value: str):
     assert expected_value == deserialize(serialized, base_data_type=dtype)
 
 
@@ -192,7 +192,7 @@ def test_roundtrip_min_sint(bit_width: int):
     (-(1 << 40),  "INTEGER56",  [0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff]),
     ((1 << 62),   "INTEGER64",  [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40]),
 ])
-def test_serialize_known_values_sint(value: int, dtype: str, expected: List[int]):
+def test_serialize_known_values_sint(value: int, dtype: str, expected: list[int]):
     assert expected == serialize(value, name=dtype)
 
 
@@ -208,7 +208,7 @@ def test_serialize_known_values_sint(value: int, dtype: str, expected: List[int]
     ([0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff],     "INTEGER56",  -(1 << 40)),
     ([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40], "INTEGER64", (1 << 62)),
 ])
-def test_deserialize_known_values_sint(serialized: List[int], dtype: str, expected_value: int):
+def test_deserialize_known_values_sint(serialized: list[int], dtype: str, expected_value: int):
     assert expected_value == deserialize(serialized, name=dtype)
 
 
@@ -264,7 +264,7 @@ def test_roundtrip_random_bool():
     (0,     "BOOL", [0x00]),
     (1,     "BOOL", [0x01]),
 ])
-def test_serialize_known_values_bool(value, dtype: str, expected: List[int]):
+def test_serialize_known_values_bool(value, dtype: str, expected: list[int]):
     assert expected == serialize(value, base_data_type=dtype)
 
 
@@ -276,7 +276,7 @@ def test_serialize_known_values_bool(value, dtype: str, expected: List[int]):
     ([0x00], "BOOL", 0),
     ([0x01], "BOOL", 1),
 ])
-def test_deserialize_known_values_bool(serialized: List[int], dtype: str, expected_value):
+def test_deserialize_known_values_bool(serialized: list[int], dtype: str, expected_value):
     assert expected_value == deserialize(serialized, base_data_type=dtype)
 
 
@@ -323,3 +323,65 @@ def test_roundtrip_nan_real(dtype: str):
     value = float("nan")
     result = deserialize(serialize(value, name=dtype), name=dtype)
     assert isnan(result)
+
+
+# ---------------------------------------------------------------------------
+# TIME_OF_DAY, TIME_DIFFERENCE tests
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("dtype", ["TIME_OF_DAY", "TIME_DIFFERENCE"])
+def test_roundtrip_random_time48(dtype: str):
+    """Serializing then deserializing a random valid value returns the original."""
+    ms = random.randint(0, (1 << 28) - 1)
+    days = random.randint(0, (1 << 16) - 1)
+    value = (ms, days)
+    assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
+
+
+@pytest.mark.parametrize("dtype", ["TIME_OF_DAY", "TIME_DIFFERENCE"])
+def test_roundtrip_min_time48(dtype: str):
+    """Zero ms and days survive a round-trip for both data types."""
+    assert (0, 0) == deserialize(serialize((0, 0), base_data_type=dtype), base_data_type=dtype)
+
+
+@pytest.mark.parametrize("dtype", ["TIME_OF_DAY", "TIME_DIFFERENCE"])
+def test_roundtrip_max_time48(dtype: str):
+    """Max-value ms and days survive a round-trip for both data types."""
+    ms = (1 << 28) - 1
+    days = (1 << 16) - 1
+    value = (ms, days)
+    assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
+
+
+# --- Explicit serialization checks (known input -> known list[int]) ---
+
+@pytest.mark.parametrize("value, dtype, expected", [
+    ((5000, 5000), "TIME_OF_DAY", [0x88, 0x13, 0x80, 0x38, 0x01, 0x00]),
+    ((1000, 1000), "TIME_DIFFERENCE", [0xE8, 0x03, 0x80, 0x3E, 0x00, 0x00]),
+])
+def test_serialize_known_values_time48(value: int, dtype: str, expected: list[int]):
+    assert expected == serialize(value, name=dtype)
+
+
+# --- Explicit deserialization checks (known list[int] -> known output) ---
+
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0x88, 0x13, 0x80, 0x38, 0x01, 0x00], "TIME_OF_DAY", (5000, 5000)),
+    ([0xE8, 0x03, 0x80, 0x3E, 0x00, 0x00], "TIME_DIFFERENCE", (1000, 1000)),
+])
+def test_deserialize_known_values_time48(serialized: list[int], dtype: str, expected_value: int):
+    assert expected_value == deserialize(serialized, name=dtype)
+
+
+# ---------------------------------------------------------------------------
+# TIME_OF_DAY, TIME_DIFFERENCE tests
+# ---------------------------------------------------------------------------
+
+# --- round-trip test ---
+
+def test_roundtrip_random_guid():
+    """Serializing then deserializing a random valid value returns the original."""
+    value = uuid.uuid4()
+    assert value == deserialize(serialize(value, base_data_type="GUID"), base_data_type="GUID")
