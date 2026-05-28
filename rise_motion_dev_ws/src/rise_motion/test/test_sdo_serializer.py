@@ -2,6 +2,8 @@
 import random
 import pytest
 from rise_motion.sdo_serializer import serialize, deserialize
+from math import isnan
+from typing import List
 
 # ---------------------------------------------------------------------------
 # Bit strings BIT1 - BIT16 tests
@@ -34,33 +36,33 @@ def test_roundtrip_max_bitstrings(bit_width: int):
     assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
 
 
-# --- Explicit serialization checks (known input -> known bytes) ---
+# --- Explicit serialization checks (known input -> known list[int]) ---
 
-@pytest.mark.parametrize("value, dtype, expected_bytes", [
-    ("0",                "BIT1",  b"\x00"),
-    ("1",                "BIT1",  b"\x01"),
-    ("11",               "BIT2",  b"\x03"),
-    ("10",               "BIT2",  b"\x02"),
-    ("1111111111111111", "BIT16", b"\xff\xff"),
-    ("0000000000000000", "BIT16", b"\x00\x00"),
-    ("1000000000000000", "BIT16", b"\x00\x80"),  # MSB only
+@pytest.mark.parametrize("value, dtype, expected", [
+    ("0",                "BIT1",  [0x00]),
+    ("1",                "BIT1",  [0x01]),
+    ("11",               "BIT2",  [0x03]),
+    ("10",               "BIT2",  [0x02]),
+    ("1111111111111111", "BIT16", [0xff, 0xff]),
+    ("0000000000000000", "BIT16", [0x00, 0x00]),
+    ("1000000000000000", "BIT16", [0x00, 0x80]),  # MSB only
 ])
-def test_serialize_known_values_bitstrings(value: str, dtype: str, expected_bytes: bytes):
-    assert expected_bytes == serialize(value, base_data_type=dtype)
+def test_serialize_known_values_bitstrings(value: str, dtype: str, expected: List[int]):
+    assert expected == serialize(value, base_data_type=dtype)
 
 
-# --- Explicit deserialization checks (known bytes -> known output) ---
+# --- Explicit deserialization checks (known list[int] -> known output) ---
 
-@pytest.mark.parametrize("raw_bytes, dtype, expected_value", [
-    (b"\x00", "BIT1",  "0"),
-    (b"\x01", "BIT1",  "1"),
-    (b"\x03", "BIT2",  "11"),
-    (b"\x02", "BIT2",  "10"),
-    (b"\xff\xff", "BIT16", "1111111111111111"),
-    (b"\x00\x00", "BIT16", "0000000000000000"),
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0x00], "BIT1",  "0"),
+    ([0x01], "BIT1",  "1"),
+    ([0x03], "BIT2",  "11"),
+    ([0x02], "BIT2",  "10"),
+    ([0xff, 0xff], "BIT16", "1111111111111111"),
+    ([0x00, 0x00], "BIT16", "0000000000000000"),
 ])
-def test_deserialize_known_values_bitstrings(raw_bytes: bytes, dtype: str, expected_value: str):
-    assert expected_value == deserialize(raw_bytes, base_data_type=dtype)
+def test_deserialize_known_values_bitstrings(serialized: List[int], dtype: str, expected_value: str):
+    assert expected_value == deserialize(serialized, base_data_type=dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -97,58 +99,49 @@ def test_roundtrip_max_bitarr_word(bit_width: int, dtype: str):
     assert value == deserialize(serialize(value, base_data_type=dtype), base_data_type=dtype)
 
 
-# --- Explicit serialization checks (known input -> known bytes) ---
+# --- Explicit serialization checks (known input -> known list[int]) ---
 
-@pytest.mark.parametrize("value, dtype, expected_bytes", [
-    ("10101100",                         "BITARR8",  b"\xac"),
-    ("01010101",                         "BITARR8",  b"\x55"),
-    ("1100101001110001",                 "BITARR16", b"\x71\xca"),
-    ("0011110000101110",                 "BITARR16", b"\x2e\x3c"),
-    ("10010000111100001010101001101101", "BITARR32", b"\x6d\xaa\xf0\x90"),
-    ("01101111000101011000001111110000", "BITARR32", b"\xf0\x83\x15\x6f"),
-    ("10101100",                         "BYTE",     b"\xac"),
-    ("01010101",                         "BYTE",     b"\x55"),
-    ("1100101001110001",                 "WORD",     b"\x71\xca"),
-    ("0011110000101110",                 "WORD",     b"\x2e\x3c"),
-    ("10010000111100001010101001101101", "DWORD",    b"\x6d\xaa\xf0\x90"),
-    ("01101111000101011000001111110000", "DWORD",    b"\xf0\x83\x15\x6f"),
+@pytest.mark.parametrize("value, dtype, expected", [
+    ("10101100",                         "BITARR8",  [0xac]),
+    ("01010101",                         "BITARR8",  [0x55]),
+    ("1100101001110001",                 "BITARR16", [0x71, 0xca]),
+    ("0011110000101110",                 "BITARR16", [0x2e, 0x3c]),
+    ("10010000111100001010101001101101", "BITARR32", [0x6d, 0xaa, 0xf0, 0x90]),
+    ("01101111000101011000001111110000", "BITARR32", [0xf0, 0x83, 0x15, 0x6f]),
+    ("10101100",                         "BYTE",     [0xac]),
+    ("01010101",                         "BYTE",     [0x55]),
+    ("1100101001110001",                 "WORD",     [0x71, 0xca]),
+    ("0011110000101110",                 "WORD",     [0x2e, 0x3c]),
+    ("10010000111100001010101001101101", "DWORD",    [0x6d, 0xaa, 0xf0, 0x90]),
+    ("01101111000101011000001111110000", "DWORD",    [0xf0, 0x83, 0x15, 0x6f]),
 ])
-def test_serialize_known_values_bitarr_word(value: str, dtype: str, expected_bytes: bytes):
-    assert expected_bytes == serialize(value, base_data_type=dtype)
+def test_serialize_known_values_bitarr_word(value: str, dtype: str, expected: List[int]):
+    assert expected == serialize(value, base_data_type=dtype)
 
 
-# --- Explicit deserialization checks (known bytes -> known output) ---
+# --- Explicit deserialization checks (known list[int] -> known output) ---
 
-@pytest.mark.parametrize("expected_value, dtype, raw_bytes", [
-    ("10101100",                         "BITARR8",  b"\xac"),
-    ("01010101",                         "BITARR8",  b"\x55"),
-    ("1100101001110001",                 "BITARR16", b"\x71\xca"),
-    ("0011110000101110",                 "BITARR16", b"\x2e\x3c"),
-    ("10010000111100001010101001101101", "BITARR32", b"\x6d\xaa\xf0\x90"),
-    ("01101111000101011000001111110000", "BITARR32", b"\xf0\x83\x15\x6f"),
-    ("10101100",                         "BYTE",     b"\xac"),
-    ("01010101",                         "BYTE",     b"\x55"),
-    ("1100101001110001",                 "WORD",     b"\x71\xca"),
-    ("0011110000101110",                 "WORD",     b"\x2e\x3c"),
-    ("10010000111100001010101001101101", "DWORD",    b"\x6d\xaa\xf0\x90"),
-    ("01101111000101011000001111110000", "DWORD",    b"\xf0\x83\x15\x6f"),
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0xac],                             "BITARR8",  "10101100"),
+    ([0x55],                             "BITARR8",  "01010101"),
+    ([0x71, 0xca],                       "BITARR16", "1100101001110001"),
+    ([0x2e, 0x3c],                       "BITARR16", "0011110000101110"),
+    ([0x6d, 0xaa, 0xf0, 0x90],          "BITARR32", "10010000111100001010101001101101"),
+    ([0xf0, 0x83, 0x15, 0x6f],          "BITARR32", "01101111000101011000001111110000"),
+    ([0xac],                             "BYTE",     "10101100"),
+    ([0x55],                             "BYTE",     "01010101"),
+    ([0x71, 0xca],                       "WORD",     "1100101001110001"),
+    ([0x2e, 0x3c],                       "WORD",     "0011110000101110"),
+    ([0x6d, 0xaa, 0xf0, 0x90],          "DWORD",    "10010000111100001010101001101101"),
+    ([0xf0, 0x83, 0x15, 0x6f],          "DWORD",    "01101111000101011000001111110000"),
 ])
-def test_deserialize_known_values_bitarr_word(raw_bytes: bytes, dtype: str, expected_value: str):
-    assert expected_value == deserialize(raw_bytes, base_data_type=dtype)
+def test_deserialize_known_values_bitarr_word(serialized: List[int], dtype: str, expected_value: str):
+    assert expected_value == deserialize(serialized, base_data_type=dtype)
 
-# --- bytes passthrough test for serializing BYTE ---
-
-def test_serializing_byte_passthrough():
-    """Serializing a bytes object should return the same bytes object."""
-    value = serialize(random.randint(0, (1 << 8)-1), name="UNSIGNED8")
-    assert value == serialize(value, name="BYTE")
 
 # ---------------------------------------------------------------------------
 # Signed integers 8, 16, 24, 32, 40, 48, 56, 64 tests
 # ---------------------------------------------------------------------------
-# These tests could be overkill for such a simple function,
-# because I wrote them using the tests for the datatypes above as a template.
-# Maybe they will help should the serialization for signed ints get more elaborate.
 
 # --- round-trip tests ---
 
@@ -162,7 +155,7 @@ def test_roundtrip_random_sint(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_min_sint(bit_width: int):
+def test_roundtrip_zero_sint(bit_width: int):
     """Zero survives a round-trip for every integer size."""
     value = 0
     dtype = f"INTEGER{bit_width}"
@@ -179,7 +172,7 @@ def test_roundtrip_max_sint(bit_width: int):
 
 
 @pytest.mark.parametrize("bit_width", [8, 16, 24, 32, 40, 48, 56, 64])
-def test_roundtrip_max_sint(bit_width: int):
+def test_roundtrip_min_sint(bit_width: int):
     """min-value survives a round-trip for every integer size."""
     max_val = 1 << (bit_width-1)
     value = -max_val
@@ -187,36 +180,36 @@ def test_roundtrip_max_sint(bit_width: int):
     assert value == deserialize(serialize(value, name=dtype), name=dtype)
 
 
-# --- Explicit serialization checks (known input -> known bytes) ---
+# --- Explicit serialization checks (known input -> known list[int]) ---
 
-@pytest.mark.parametrize("value, dtype, expected_bytes", [
-    (-(1 << 3),   "INTEGER8",   b"\xf8"),
-    ((1 << 12),   "INTEGER16",  b"\x00\x10"),
-    (-(1 << 22),  "INTEGER24",  b"\x00\x00\xc0"),
-    ((1 << 2),    "INTEGER32",  b"\x04\x00\x00\x00"),
-    (-(1 << 20),  "INTEGER40",  b"\x00\x00\xf0\xff\xff"),
-    ((1 << 40),   "INTEGER48",  b"\x00\x00\x00\x00\x00\x01"),
-    (-(1 << 40),  "INTEGER56",  b"\x00\x00\x00\x00\x00\xff\xff"),
-    ((1 << 62),   "INTEGER64",  b"\x00\x00\x00\x00\x00\x00\x00\x40"),
+@pytest.mark.parametrize("value, dtype, expected", [
+    (-(1 << 3),   "INTEGER8",   [0xf8]),
+    ((1 << 12),   "INTEGER16",  [0x00, 0x10]),
+    (-(1 << 22),  "INTEGER24",  [0x00, 0x00, 0xc0]),
+    ((1 << 2),    "INTEGER32",  [0x04, 0x00, 0x00, 0x00]),
+    (-(1 << 20),  "INTEGER40",  [0x00, 0x00, 0xf0, 0xff, 0xff]),
+    ((1 << 40),   "INTEGER48",  [0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+    (-(1 << 40),  "INTEGER56",  [0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff]),
+    ((1 << 62),   "INTEGER64",  [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40]),
 ])
-def test_serialize_known_values_sint(value: str, dtype: str, expected_bytes: bytes):
-    assert expected_bytes == serialize(value, name=dtype)
+def test_serialize_known_values_sint(value: int, dtype: str, expected: List[int]):
+    assert expected == serialize(value, name=dtype)
 
 
-# --- Explicit deserialization checks (known bytes -> known output) ---
+# --- Explicit deserialization checks (known list[int] -> known output) ---
 
-@pytest.mark.parametrize("expected_value, dtype, raw_bytes", [
-    (-(1 << 3),   "INTEGER8",   b"\xf8"),
-    ((1 << 12),   "INTEGER16",  b"\x00\x10"),
-    (-(1 << 22),  "INTEGER24",  b"\x00\x00\xc0"),
-    ((1 << 2),    "INTEGER32",  b"\x04\x00\x00\x00"),
-    (-(1 << 20),  "INTEGER40",  b"\x00\x00\xf0\xff\xff"),
-    ((1 << 40),   "INTEGER48",  b"\x00\x00\x00\x00\x00\x01"),
-    (-(1 << 40),  "INTEGER56",  b"\x00\x00\x00\x00\x00\xff\xff"),
-    ((1 << 62),   "INTEGER64",  b"\x00\x00\x00\x00\x00\x00\x00\x40"),
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0xf8],                                         "INTEGER8",   -(1 << 3)),
+    ([0x00, 0x10],                                   "INTEGER16",  (1 << 12)),
+    ([0x00, 0x00, 0xc0],                             "INTEGER24",  -(1 << 22)),
+    ([0x04, 0x00, 0x00, 0x00],                       "INTEGER32",  (1 << 2)),
+    ([0x00, 0x00, 0xf0, 0xff, 0xff],                 "INTEGER40",  -(1 << 20)),
+    ([0x00, 0x00, 0x00, 0x00, 0x00, 0x01],           "INTEGER48",  (1 << 40)),
+    ([0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff],     "INTEGER56",  -(1 << 40)),
+    ([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40], "INTEGER64", (1 << 62)),
 ])
-def test_deserialize_known_values_sint(raw_bytes: bytes, dtype: str, expected_value: str):
-    assert expected_value == deserialize(raw_bytes, name=dtype)
+def test_deserialize_known_values_sint(serialized: List[int], dtype: str, expected_value: int):
+    assert expected_value == deserialize(serialized, name=dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +243,7 @@ def test_roundtrip_max_uint(bit_width: int):
     dtype = f"UNSIGNED{bit_width}"
     assert value == deserialize(serialize(value, name=dtype), name=dtype)
 
-   
+
 # ---------------------------------------------------------------------------
 # Bool tests
 # ---------------------------------------------------------------------------
@@ -263,25 +256,70 @@ def test_roundtrip_random_bool():
     assert value == deserialize(serialize(value, base_data_type="BOOL"), base_data_type="BOOL")
 
 
-# --- Explicit serialization checks (known input -> known bytes) ---
+# --- Explicit serialization checks (known input -> known list[int]) ---
 
-@pytest.mark.parametrize("value, dtype, expected_bytes", [
-    (False, "BOOL", b"\x00"),
-    (True,  "BOOL", b"\x01"),
-    (0,     "BOOL", b"\x00"),
-    (1,     "BOOL", b"\x01"),
+@pytest.mark.parametrize("value, dtype, expected", [
+    (False, "BOOL", [0x00]),
+    (True,  "BOOL", [0x01]),
+    (0,     "BOOL", [0x00]),
+    (1,     "BOOL", [0x01]),
 ])
-def test_serialize_known_values_bool(value: str, dtype: str, expected_bytes: bytes):
-    assert expected_bytes == serialize(value, base_data_type=dtype)
+def test_serialize_known_values_bool(value, dtype: str, expected: List[int]):
+    assert expected == serialize(value, base_data_type=dtype)
 
 
-# --- Explicit deserialization checks (known bytes -> known output) ---
+# --- Explicit deserialization checks (known list[int] -> known output) ---
 
-@pytest.mark.parametrize("expected_value, dtype, raw_bytes", [
-    (False, "BOOL", b"\x00"),
-    (True,  "BOOL", b"\x01"),
-    (0,     "BOOL", b"\x00"),
-    (1,     "BOOL", b"\x01"),
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0x00], "BOOL", False),
+    ([0x01], "BOOL", True),
+    ([0x00], "BOOL", 0),
+    ([0x01], "BOOL", 1),
 ])
-def test_deserialize_known_values_bool(raw_bytes: bytes, dtype: str, expected_value: str):
-    assert expected_value == deserialize(raw_bytes, base_data_type=dtype)
+def test_deserialize_known_values_bool(serialized: List[int], dtype: str, expected_value):
+    assert expected_value == deserialize(serialized, base_data_type=dtype)
+
+
+# ---------------------------------------------------------------------------
+# Floating-point REAL32, REAL64 tests
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize(("dtype", "value"), [
+    ("REAL32", random.uniform(-3.4e38, 3.4e38)),
+    ("REAL64", random.uniform(-1.7e308, 1.7e308)),
+])
+def test_roundtrip_random_real(dtype: str, value: float):
+    """Serializing then deserializing a random valid float returns the original."""
+    result = deserialize(serialize(value, name=dtype), name=dtype)
+    if dtype == "REAL32":
+        assert result == pytest.approx(value, rel=1e-6) # Python uses 64 bit so we lose some precision on the roundtrip
+    else:
+        assert result == value
+
+
+@pytest.mark.parametrize("dtype", ["REAL32", "REAL64"])
+def test_roundtrip_zero_real(dtype: str):
+    """Zero survives a round-trip for every floating-point size."""
+    value = 0.0
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize(("dtype", "value"), [
+    ("REAL32", float("inf")),
+    ("REAL32", float("-inf")),
+    ("REAL64", float("inf")),
+    ("REAL64", float("-inf")),
+])
+def test_roundtrip_infinity_real(dtype: str, value: float):
+    """Infinity values survive a round-trip."""
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype", ["REAL32", "REAL64"])
+def test_roundtrip_nan_real(dtype: str):
+    """NaN survives a round-trip."""
+    value = float("nan")
+    result = deserialize(serialize(value, name=dtype), name=dtype)
+    assert isnan(result)
