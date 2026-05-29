@@ -385,3 +385,135 @@ def test_roundtrip_random_guid():
     """Serializing then deserializing a random valid value returns the original."""
     value = uuid.uuid4()
     assert value == deserialize(serialize(value, base_data_type="GUID"), base_data_type="GUID")
+
+
+# ---------------------------------------------------------------------------
+# VISIBLE_STRING (ASCII, 1 byte per char) tests
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("value", [
+    "hello",
+    "Hello, World!",
+    "EtherCAT",
+    "test 123",
+    "",                  # empty string
+    "A",                 # single char
+    " ",                 # space
+    "!@#$%^&*()",        # special ASCII chars
+    "a" * 100,           # long string
+])
+def test_roundtrip_visible_string(value: str):
+    """Serializing then deserializing a string returns the original."""
+    assert value == deserialize(serialize(value, name="VISIBLE_STRING"), name="VISIBLE_STRING")
+
+
+# --- Explicit serialization checks (known input -> known list[int]) ---
+
+@pytest.mark.parametrize("value, expected", [
+    ("A",     [0x41]),
+    ("AB",    [0x41, 0x42]),
+    ("hi",    [0x68, 0x69]),
+    ("",      []),
+    ("\x00",  [0x00]),          # null byte
+    (" ",     [0x20]),          # space
+    ("ABC",   [0x41, 0x42, 0x43]),
+])
+def test_serialize_known_values_visible_string(value: str, expected: list[int]):
+    assert expected == serialize(value, name="VISIBLE_STRING")
+
+
+# --- Explicit deserialization checks (known list[int] -> known output) ---
+
+@pytest.mark.parametrize("serialized, expected_value", [
+    ([0x41],             "A"),
+    ([0x41, 0x42],       "AB"),
+    ([0x68, 0x69],       "hi"),
+    ([],                 ""),
+    ([0x00],             "\x00"),
+    ([0x20],             " "),
+    ([0x41, 0x42, 0x43], "ABC"),
+])
+def test_deserialize_known_values_visible_string(serialized: list[int], expected_value: str):
+    assert expected_value == deserialize(serialized, name="VISIBLE_STRING")
+
+
+# --- Invalid input ---
+
+@pytest.mark.parametrize("value", [
+    "café",      # non-ASCII (é is > 0x7F, invalid for VISIBLE_STRING)
+    "日本語",    # CJK characters
+    "😀",        # emoji
+])
+def test_serialize_visible_string_rejects_non_ascii(value: str):
+    """Characters outside the visible ASCII range should raise."""
+    with pytest.raises((ValueError, UnicodeEncodeError)):
+        serialize(value, name="VISIBLE_STRING")
+
+
+# ---------------------------------------------------------------------------
+# UNICODE_STRING (UTF-16-LE, 2 bytes per char) tests
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("value", [
+    "hello",
+    "Hello, World!",
+    "",                  # empty string
+    "A",                 # single char
+    "café",              # accented characters
+    "日本語",            # CJK characters
+    "EtherCAT 🚀",       # emoji (surrogate pair in UTF-16)
+    "a" * 100,           # long string
+])
+def test_roundtrip_unicode_string(value: str):
+    """Serializing then deserializing a unicode string returns the original."""
+    assert value == deserialize(serialize(value, name="UNICODE_STRING"), name="UNICODE_STRING")
+
+
+# --- Explicit serialization checks (known input -> known list[int]) ---
+
+@pytest.mark.parametrize("value, expected", [
+    ("A",   [0x41, 0x00]),                          # U+0041, LE
+    ("AB",  [0x41, 0x00, 0x42, 0x00]),              # two ASCII chars
+    ("",    []),                                     # empty
+    (" ",   [0x20, 0x00]),                           # space
+    ("é",   [0xe9, 0x00]),                           # U+00E9
+    ("中",  [0x2d, 0x4e]),                           # U+4E2D
+])
+def test_serialize_known_values_unicode_string(value: str, expected: list[int]):
+    assert expected == serialize(value, name="UNICODE_STRING")
+
+
+# --- Explicit deserialization checks (known list[int] -> known output) ---
+
+@pytest.mark.parametrize("serialized, expected_value", [
+    ([0x41, 0x00],             "A"),
+    ([0x41, 0x00, 0x42, 0x00], "AB"),
+    ([],                       ""),
+    ([0x20, 0x00],             " "),
+    ([0xe9, 0x00],             "é"),
+    ([0x2d, 0x4e],             "中"),
+])
+def test_deserialize_known_values_unicode_string(serialized: list[int], expected_value: str):
+    assert expected_value == deserialize(serialized, name="UNICODE_STRING")
+
+
+# --- Byte count is always even ---
+
+@pytest.mark.parametrize("value", ["A", "AB", "ABC", "日本語"])
+def test_unicode_string_serialized_length_is_even(value: str):
+    """UTF-16-LE encoding always produces an even number of bytes."""
+    assert len(serialize(value, name="UNICODE_STRING")) % 2 == 0
+
+
+# --- Odd-length input is rejected ---
+
+def test_deserialize_unicode_string_rejects_odd_length():
+    """An odd number of bytes cannot be valid UTF-16-LE."""
+    with pytest.raises((ValueError, UnicodeDecodeError)):
+        deserialize([0x41], name="UNICODE_STRING")
+
+

@@ -81,6 +81,25 @@ BASE_DATA_TYPES: dict[int, TypeInfo] = {
 
     # GUID
     0x001D: TypeInfo(0x001D, "GUID", "GUID", 128, "serialize_guid", "deserialize_guid"),
+
+    # - Base Data Types with variable length -
+    # Strings
+    0x0009: TypeInfo(0x0009, "VISIBLE_STRING", "STRING(n)",  8,  "serialize_visible_string", "deserialize_visible_string"),#8*(n)),
+    0x0268: TypeInfo(0x0268, "UNICODE_STRING", "WSTRING(n)", 16, "serialize_unicode_string", "deserialize_unicode_string"),#16*(n)
+    
+    # Octet field
+    0x000A: TypeInfo(0x000A, "OCTET_STRING",      "ARRAY [0..n] OF BYTE",     8,  "serialize_bitn",  "deserialize_bitn"),#8*(n+1)
+    0x000B: TypeInfo(0x000B, "ARRAY_OF_UINT",     "ARRAY [0..n] OF UINT",     16, "serialize_uint",  "deserialize_uint"),#16*(n+1)
+    0x0260: TypeInfo(0x0260, "ARRAY_OF_INT",      "ARRAY [0..n] OF INT",      16, "serialize_int",   "deserialize_int"),#16*(n+1)
+    0x0261: TypeInfo(0x0261, "ARRAY_OF_SINT",     "ARRAY [0..n] OF SINT",     8,  "serialize_int",   "deserialize_int"),#8*(n+1)
+    0x0262: TypeInfo(0x0262, "ARRAY_OF_DINT",     "ARRAY [0..n] OF DINT",     32, "serialize_int",   "deserialize_int"),#32*(n+1)
+    0x0263: TypeInfo(0x0263, "ARRAY_OF_UDINT",    "ARRAY [0..n] OF UDINT",    32, "serialize_uint",  "deserialize_uint"),#32*(n+1)
+    0x0264: TypeInfo(0x0264, "ARRAY_OF_BITARR8",  "ARRAY [0..n] OF BITARR8",  8,  "serialize_bitn",  "deserialize_bitn"),#8*(n+1)
+    0x0265: TypeInfo(0x0265, "ARRAY_OF_BITARR16", "ARRAY [0..n] OF BITARR16", 16, "serialize_bitn",  "deserialize_bitn"),#16*(n+1)
+    0x0266: TypeInfo(0x0266, "ARRAY_OF_BITARR32", "ARRAY [0..n] OF BITARR32", 32, "serialize_bitn",  "deserialize_bitn"),#32*(n+1)
+    0x0267: TypeInfo(0x0267, "ARRAY_OF_USINT",    "ARRAY [0..n] OF USINT",    8,  "serialize_uint",  "deserialize_uint"),#8*(n+1)
+    0x0269: TypeInfo(0x0269, "ARRAY_OF_REAL",     "ARRAY [0..n] OF REAL",     32, "serialize_float", "deserialize_float"),#32*(n+1)
+    0x026A: TypeInfo(0x026A, "ARRAY_OF_LREAL",    "ARRAY [0..n] OF LREAL",    64, "serialize_float", "deserialize_float"),#64*(n+1)
 }
 
 
@@ -149,7 +168,16 @@ def serialize(
     base_data_type: str | None = None,
 ) -> list[int]:
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-    return globals()[object_info.serialize_fn](value, object_info.bit_size)
+    
+    # serialize a base data type
+    if object_info.name[0:5] != "ARRAY":
+        return globals()[object_info.serialize_fn](value, object_info.bit_size)
+    # serialize a base data type list (imagine this: base_data_type[])
+    else:  
+        out = []
+        for item in value:
+            out.extend(globals()[object_info.serialize_fn](item, object_info.bit_size))
+        return out
 
 def deserialize(
     serialized_value: list[int],
@@ -162,11 +190,20 @@ def deserialize(
         error_msg = f"serialized_value must be a list[int] not {type(serialized_value)}"
         raise TypeError(error_msg)
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-    if (object_info.bit_size + 7) // 8 != len(serialized_value):
-        raise ValueError(
-            "number of bytes needed to contain object_info.bit_size must be equal to serialized_value length")
-    return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)
-
+    byte_len = (object_info.bit_size + 7) // 8
+    
+    # deserialize a serialized base data type
+    if object_info.name[0:5] != "ARRAY":
+        if byte_len != len(serialized_value) and object_info.name[-6:] != "STRING":
+            raise ValueError(
+                f"number of bytes needed to contain object_info.bit_size must be equal to serialized_value length")
+        return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)    
+    # deserialize a serialized base data type list (imagine this: base_data_type[])
+    else:
+        out = []
+        for i in range(0, len, serialized_value, byte_len):
+            out.append(globals()[object_info.deserialize_fn](serialized_value[i:i+byte_len], object_info.bit_size))
+        return out
 
 # ---------------------------------------------------------------------------
 # Specific functions (called by generic functions)
@@ -265,7 +302,6 @@ def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
     bits = deserialize_bitn(ser_val, bit_s)
     return (int(bits[0:28], base=2), int(bits[32:48], base=2))
 
-
 def serialize_guid(val, bit_s: int) -> list[int]:
     """
     Serialize a UUID into a list[int].
@@ -275,9 +311,48 @@ def serialize_guid(val, bit_s: int) -> list[int]:
         val = uuid.UUID(val)
     return list(val.bytes_le)
 
-
 def deserialize_guid(ser_val: list[int], bit_s: int) -> uuid.UUID:
     """
     Deserialize a list[int] into a uuid.UUID.
     """
     return uuid.UUID(bytes_le=bytes(ser_val))
+
+def serialize_visible_string(val: str, bit_s: int) -> list[int]:
+    return list(val.encode("ASCII"))
+
+def deserialize_visible_string(ser_val: list[int], bit_s: int) -> str:
+    return bytes(ser_val).decode("ASCII")
+
+def serialize_unicode_string(val: str, bit_s: int) -> list[int]:
+    return list(val.encode("utf_16_le"))
+
+def deserialize_unicode_string(ser_val: list[int], bit_s: int) -> str:
+    return bytes(ser_val).decode("utf_16_le")
+
+# def serialize_bitn_field(val: list, bit_s: int) -> list[int]:
+#     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
+#     return globals()[object_info.serialize_fn](value, object_info.bit_size)
+#     out = []
+#     for bitn in val:
+#         out.extend(serialize_bitn(bitn, bit_s))
+#     return out
+
+# def deserialize_bitn_field(ser_val: list[int], bit_s: int) -> str:
+#     byte_len = (bit_s + 7) // 8
+#     out = ""
+#     for i in range(0, len, ser_val, byte_len):
+#         out+deserialize_bitn(list[i:i+byte_len], bit_s)
+#     return out
+
+# def serialize_uint_field(val: list, bit_s: int) -> list[int]:
+#     out = []
+#     for bitn in val:
+#         out.extend(serialize_bitn(bitn, bit_s))
+#     return out
+
+# def deserialize_uint_field(ser_val: list[int], bit_s: int) -> str:
+#     byte_len = (bit_s + 7) // 8
+#     out = ""
+#     for i in range(0, len, ser_val, byte_len):
+#         out+deserialize_bitn(list[i:i+byte_len], bit_s)
+#     return out
