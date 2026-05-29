@@ -2,11 +2,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
 #include <rclcpp/client.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion_messages/msg/motor_positions.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
+#include <rise_motion_messages/srv/sdo_read_srv.hpp>
+#include <rise_motion/sdo_serializer.hpp>
 
 
 class TestNode : public rclcpp::Node {
@@ -112,6 +115,25 @@ int main(int argc, char **argv) {
   auto node = std::make_shared<TestNode>(incs);
 
   while (!node->request_enable_ethercat()) {
+  }
+  
+  rclcpp::Client<rise_motion_messages::srv::SDOReadSrv>::SharedPtr
+      sdo_client;
+  sdo_client = node->create_client<rise_motion_messages::srv::SDOReadSrv>(
+      "sdo_read");
+  auto request = std::make_shared<rise_motion_messages::srv::SDOReadSrv::Request>();
+  request->device_id = 1;
+  request->index = 0x1008;
+  request->subindex = 0;
+  request->value_type = 0;
+  auto result = sdo_client->async_send_request(request);
+  // wait for result
+  if (rclcpp::spin_until_future_complete(node, result) ==
+    rclcpp::FutureReturnCode::SUCCESS)
+  {
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sdo_value: %s", (std::string(sdo::deserialize<sdo::STRING<50>>(result.get()->value))).std::string::c_str());
+  } else {
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service sdo_read");
   }
   rclcpp::spin(node);
   rclcpp::shutdown();
