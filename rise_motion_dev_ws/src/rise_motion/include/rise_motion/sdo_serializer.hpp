@@ -1059,7 +1059,7 @@ namespace sdo
 
     template <> [[nodiscard]] inline SerializeResult serialize<bool>(const bool& value)
     {
-        return SerializeResult::ok({static_cast<std::uint8_t>(value ? 1 : 0)});
+        return SerializeResult::ok({static_cast<std::uint8_t>(value ? 0xFF : 0)});
     }
 
     // -Signed Integer-
