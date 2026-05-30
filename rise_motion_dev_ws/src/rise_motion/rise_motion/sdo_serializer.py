@@ -17,7 +17,7 @@ class TypeInfo:
 
 
 # ---------------------------------------------------------------------------
-# Master table  (keyed by object dictionary index)
+# Master table
 # ---------------------------------------------------------------------------
 
 BASE_DATA_TYPES: dict[int, TypeInfo] = {
@@ -139,7 +139,7 @@ def get_type_info(
         try:
             return BASE_DATA_TYPES[index]
         except KeyError:
-            raise KeyError(f"No EtherCAT type with index {index:#06x}") from None
+            raise KeyError(f"No EtherCAT type with index {index:#04x}") from None
 
     if name is not None:
         try:
@@ -170,7 +170,7 @@ def serialize(
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
     
     # serialize a base data type
-    if object_info.name[0:5] != "ARRAY":
+    if object_info.base_data_type[0:5] != "ARRAY":
         return globals()[object_info.serialize_fn](value, object_info.bit_size)
     # serialize a base data type list (imagine this: base_data_type[])
     else:  
@@ -186,22 +186,35 @@ def deserialize(
     name: str | None = None,
     base_data_type: str | None = None,
 ):
+    """
+    
+    """
     if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
         error_msg = f"serialized_value must be a list[int] not {type(serialized_value)}"
         raise TypeError(error_msg)
     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
     byte_len = (object_info.bit_size + 7) // 8
+    isArray = object_info.base_data_type[0:5] == "ARRAY"
     
-    # deserialize a serialized base data type
-    if object_info.name[0:5] != "ARRAY":
-        if byte_len != len(serialized_value) and object_info.name[-6:] != "STRING":
+    # check if size of variably sized serialized object is plausible
+    if object_info.name[-6:] == "STRING" or isArray:
+        if len(serialized_value)%byte_len != 0:
+            raise ValueError(
+                f"number of bytes needed to contain variably sized list of Base Data Types must be" 
+                "evenly divisible by the byte-size of those Base Data Types ")
+    # check if size of serialized object is correct
+    else:
+        if byte_len != len(serialized_value):
             raise ValueError(
                 f"number of bytes needed to contain object_info.bit_size must be equal to serialized_value length")
+
+    # deserialize a serialized base data type
+    if not isArray:
         return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)    
-    # deserialize a serialized base data type list (imagine this: base_data_type[])
+    # deserialize a serialized base data type array (imagine this: base_data_type[])
     else:
         out = []
-        for i in range(0, len, serialized_value, byte_len):
+        for i in range(0, len(serialized_value), byte_len):
             out.append(globals()[object_info.deserialize_fn](serialized_value[i:i+byte_len], object_info.bit_size))
         return out
 
@@ -218,7 +231,7 @@ def serialize_bitn(val, bit_s: int) -> list[int]:
     elif type(val) is int:
         vali = val
     else:
-        raise TypeError(f"val must be either int or str, not {type(val)}")
+        raise TypeError(f"val must be either int or str, not {type(val)} {val}")
 
     byte_len = (bit_s + 7) // 8
     return list(vali.to_bytes(byte_len, byteorder="little"))
@@ -260,15 +273,16 @@ def serialize_bool(val, bit_s: int) -> list[int]:
     """
     Serialize a bool into a list[int].
     """
-    if type(val) is bool:
-        val = int(val)
-    return serialize_bitn(val, bit_s)
+    if val:
+        return serialize_bitn(0xff, bit_s)
+    else:
+        return serialize_bitn(0x00, bit_s)
 
 def deserialize_bool(ser_val: list[int], bit_s: int) -> bool:
     """
     Deserialize a list[int] into a bool.
     """
-    return bool(int.from_bytes(bytes(ser_val), byteorder='little'))
+    return 0 != ser_val[0]
 
 def serialize_float(val, bit_s: int) -> list[int]:
     """
@@ -318,41 +332,25 @@ def deserialize_guid(ser_val: list[int], bit_s: int) -> uuid.UUID:
     return uuid.UUID(bytes_le=bytes(ser_val))
 
 def serialize_visible_string(val: str, bit_s: int) -> list[int]:
+    """
+    Serialize an ASCII encoded string into a list[int].
+    """
     return list(val.encode("ASCII"))
 
 def deserialize_visible_string(ser_val: list[int], bit_s: int) -> str:
+    """
+    Deerialize a list[int] into an ASCII encoded string.
+    """
     return bytes(ser_val).decode("ASCII")
 
 def serialize_unicode_string(val: str, bit_s: int) -> list[int]:
+    """
+    Serialize a utf_16_le encoded string into a list[int].
+    """
     return list(val.encode("utf_16_le"))
 
 def deserialize_unicode_string(ser_val: list[int], bit_s: int) -> str:
+    """
+    Deerialize a list[int] into a utf_16_le encoded string.
+    """
     return bytes(ser_val).decode("utf_16_le")
-
-# def serialize_bitn_field(val: list, bit_s: int) -> list[int]:
-#     object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-#     return globals()[object_info.serialize_fn](value, object_info.bit_size)
-#     out = []
-#     for bitn in val:
-#         out.extend(serialize_bitn(bitn, bit_s))
-#     return out
-
-# def deserialize_bitn_field(ser_val: list[int], bit_s: int) -> str:
-#     byte_len = (bit_s + 7) // 8
-#     out = ""
-#     for i in range(0, len, ser_val, byte_len):
-#         out+deserialize_bitn(list[i:i+byte_len], bit_s)
-#     return out
-
-# def serialize_uint_field(val: list, bit_s: int) -> list[int]:
-#     out = []
-#     for bitn in val:
-#         out.extend(serialize_bitn(bitn, bit_s))
-#     return out
-
-# def deserialize_uint_field(ser_val: list[int], bit_s: int) -> str:
-#     byte_len = (bit_s + 7) // 8
-#     out = ""
-#     for i in range(0, len, ser_val, byte_len):
-#         out+deserialize_bitn(list[i:i+byte_len], bit_s)
-#     return out

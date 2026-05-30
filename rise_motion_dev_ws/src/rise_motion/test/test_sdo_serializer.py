@@ -260,9 +260,9 @@ def test_roundtrip_random_bool():
 
 @pytest.mark.parametrize("value, dtype, expected", [
     (False, "BOOL", [0x00]),
-    (True,  "BOOL", [0x01]),
+    (True,  "BOOL", [0xff]),
     (0,     "BOOL", [0x00]),
-    (1,     "BOOL", [0x01]),
+    (1,     "BOOL", [0xff]),
 ])
 def test_serialize_known_values_bool(value, dtype: str, expected: list[int]):
     assert expected == serialize(value, base_data_type=dtype)
@@ -517,3 +517,384 @@ def test_deserialize_unicode_string_rejects_odd_length():
         deserialize([0x41], name="UNICODE_STRING")
 
 
+# ---------------------------------------------------------------------------
+# OCTET_STRING and ARRAY_OF_BITARRn tests (arrays of bit strings)
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("OCTET_STRING",      8),
+    ("ARRAY_OF_BITARR8",  8),
+    ("ARRAY_OF_BITARR16", 16),
+    ("ARRAY_OF_BITARR32", 32),
+])
+def test_roundtrip_random_bitarr_array(dtype: str, bit_width: int):
+    """Serializing then deserializing a random array of bit strings returns the original."""
+    max_val = (1 << bit_width) - 1
+    value = [format(random.randint(0, max_val), f"0{bit_width}b") for _ in range(random.randint(1, 8))]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("OCTET_STRING",      8),
+    ("ARRAY_OF_BITARR8",  8),
+    ("ARRAY_OF_BITARR16", 16),
+    ("ARRAY_OF_BITARR32", 32),
+])
+def test_roundtrip_single_element_bitarr_array(dtype: str, bit_width: int):
+    """Single-element array survives a round-trip."""
+    value = ["0" * bit_width]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("OCTET_STRING",      8),
+    ("ARRAY_OF_BITARR8",  8),
+    ("ARRAY_OF_BITARR16", 16),
+    ("ARRAY_OF_BITARR32", 32),
+])
+def test_roundtrip_all_ones_bitarr_array(dtype: str, bit_width: int):
+    """All-ones array survives a round-trip."""
+    value = ["1" * bit_width] * 4
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+# --- Explicit serialization checks ---
+
+@pytest.mark.parametrize("value, dtype, expected", [
+    # OCTET_STRING / ARRAY_OF_BITARR8: 1 byte per element
+    (["10101100"],                         "OCTET_STRING",      [0xac]),
+    (["10101100", "01010101"],             "OCTET_STRING",      [0xac, 0x55]),
+    (["00000000", "11111111"],             "OCTET_STRING",      [0x00, 0xff]),
+    (["10101100"],                         "ARRAY_OF_BITARR8",  [0xac]),
+    (["10101100", "01010101"],             "ARRAY_OF_BITARR8",  [0xac, 0x55]),
+    # ARRAY_OF_BITARR16: 2 bytes per element
+    (["1100101001110001"],                 "ARRAY_OF_BITARR16", [0x71, 0xca]),
+    (["1100101001110001", "0011110000101110"], "ARRAY_OF_BITARR16", [0x71, 0xca, 0x2e, 0x3c]),
+    # ARRAY_OF_BITARR32: 4 bytes per element
+    (["10010000111100001010101001101101"], "ARRAY_OF_BITARR32", [0x6d, 0xaa, 0xf0, 0x90]),
+    (["10010000111100001010101001101101",
+       "01101111000101011000001111110000"], "ARRAY_OF_BITARR32", [0x6d, 0xaa, 0xf0, 0x90,
+                                                                  0xf0, 0x83, 0x15, 0x6f]),
+])
+def test_serialize_known_values_bitarr_array(value: list, dtype: str, expected: list[int]):
+    assert expected == serialize(value, name=dtype)
+
+
+# --- Explicit deserialization checks ---
+
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0xac],             "OCTET_STRING",      ["10101100"]),
+    ([0xac, 0x55],       "OCTET_STRING",      ["10101100", "01010101"]),
+    ([0x00, 0xff],       "OCTET_STRING",      ["00000000", "11111111"]),
+    ([0xac],             "ARRAY_OF_BITARR8",  ["10101100"]),
+    ([0xac, 0x55],       "ARRAY_OF_BITARR8",  ["10101100", "01010101"]),
+    ([0x71, 0xca],       "ARRAY_OF_BITARR16", ["1100101001110001"]),
+    ([0x71, 0xca, 0x2e, 0x3c], "ARRAY_OF_BITARR16", ["1100101001110001", "0011110000101110"]),
+    ([0x6d, 0xaa, 0xf0, 0x90], "ARRAY_OF_BITARR32", ["10010000111100001010101001101101"]),
+    ([0x6d, 0xaa, 0xf0, 0x90,
+      0xf0, 0x83, 0x15, 0x6f], "ARRAY_OF_BITARR32", ["10010000111100001010101001101101",
+                                                       "01101111000101011000001111110000"]),
+])
+def test_deserialize_known_values_bitarr_array(serialized: list[int], dtype: str, expected_value: list):
+    assert expected_value == deserialize(serialized, name=dtype)
+
+
+# ---------------------------------------------------------------------------
+# ARRAY_OF_UINT, ARRAY_OF_UDINT, ARRAY_OF_USINT tests (unsigned int arrays)
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("ARRAY_OF_USINT", 8),
+    ("ARRAY_OF_UINT",  16),
+    ("ARRAY_OF_UDINT", 32),
+])
+def test_roundtrip_random_uint_array(dtype: str, bit_width: int):
+    """Serializing then deserializing a random array of uints returns the original."""
+    max_val = (1 << bit_width) - 1
+    value = [random.randint(0, max_val) for _ in range(random.randint(1, 8))]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype", ["ARRAY_OF_USINT", "ARRAY_OF_UINT", "ARRAY_OF_UDINT"])
+def test_roundtrip_zeros_uint_array(dtype: str):
+    """Array of zeros survives a round-trip."""
+    value = [0, 0, 0, 0]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("ARRAY_OF_USINT", 8),
+    ("ARRAY_OF_UINT",  16),
+    ("ARRAY_OF_UDINT", 32),
+])
+def test_roundtrip_max_uint_array(dtype: str, bit_width: int):
+    """Array of max values survives a round-trip."""
+    max_val = (1 << bit_width) - 1
+    value = [max_val] * 4
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+# --- Explicit serialization checks ---
+
+@pytest.mark.parametrize("value, dtype, expected", [
+    # ARRAY_OF_USINT: 1 byte per element
+    ([0],          "ARRAY_OF_USINT", [0x00]),
+    ([255],        "ARRAY_OF_USINT", [0xff]),
+    ([1, 2, 3],    "ARRAY_OF_USINT", [0x01, 0x02, 0x03]),
+    ([0, 128, 255],"ARRAY_OF_USINT", [0x00, 0x80, 0xff]),
+    # ARRAY_OF_UINT: 2 bytes per element (little-endian)
+    ([0],          "ARRAY_OF_UINT",  [0x00, 0x00]),
+    ([1],          "ARRAY_OF_UINT",  [0x01, 0x00]),
+    ([256],        "ARRAY_OF_UINT",  [0x00, 0x01]),
+    ([1, 2],       "ARRAY_OF_UINT",  [0x01, 0x00, 0x02, 0x00]),
+    ([0x1234],     "ARRAY_OF_UINT",  [0x34, 0x12]),
+    # ARRAY_OF_UDINT: 4 bytes per element (little-endian)
+    ([0],          "ARRAY_OF_UDINT", [0x00, 0x00, 0x00, 0x00]),
+    ([1],          "ARRAY_OF_UDINT", [0x01, 0x00, 0x00, 0x00]),
+    ([0x12345678], "ARRAY_OF_UDINT", [0x78, 0x56, 0x34, 0x12]),
+    ([1, 2],       "ARRAY_OF_UDINT", [0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00]),
+])
+def test_serialize_known_values_uint_array(value: list, dtype: str, expected: list[int]):
+    assert expected == serialize(value, name=dtype)
+
+
+# --- Explicit deserialization checks ---
+
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0x00],                               "ARRAY_OF_USINT", [0]),
+    ([0xff],                               "ARRAY_OF_USINT", [255]),
+    ([0x01, 0x02, 0x03],                   "ARRAY_OF_USINT", [1, 2, 3]),
+    ([0x00, 0x80, 0xff],                   "ARRAY_OF_USINT", [0, 128, 255]),
+    ([0x00, 0x00],                         "ARRAY_OF_UINT",  [0]),
+    ([0x01, 0x00],                         "ARRAY_OF_UINT",  [1]),
+    ([0x34, 0x12],                         "ARRAY_OF_UINT",  [0x1234]),
+    ([0x01, 0x00, 0x02, 0x00],             "ARRAY_OF_UINT",  [1, 2]),
+    ([0x00, 0x00, 0x00, 0x00],             "ARRAY_OF_UDINT", [0]),
+    ([0x78, 0x56, 0x34, 0x12],             "ARRAY_OF_UDINT", [0x12345678]),
+    ([0x01, 0x00, 0x00, 0x00,
+      0x02, 0x00, 0x00, 0x00],             "ARRAY_OF_UDINT", [1, 2]),
+])
+def test_deserialize_known_values_uint_array(serialized: list[int], dtype: str, expected_value: list):
+    assert expected_value == deserialize(serialized, name=dtype)
+
+
+# ---------------------------------------------------------------------------
+# ARRAY_OF_INT, ARRAY_OF_SINT, ARRAY_OF_DINT tests (signed int arrays)
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("ARRAY_OF_SINT", 8),
+    ("ARRAY_OF_INT",  16),
+    ("ARRAY_OF_DINT", 32),
+])
+def test_roundtrip_random_sint_array(dtype: str, bit_width: int):
+    """Serializing then deserializing a random array of signed ints returns the original."""
+    half = 1 << (bit_width - 1)
+    value = [random.randint(-half, half - 1) for _ in range(random.randint(1, 8))]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype", ["ARRAY_OF_SINT", "ARRAY_OF_INT", "ARRAY_OF_DINT"])
+def test_roundtrip_zeros_sint_array(dtype: str):
+    """Array of zeros survives a round-trip."""
+    value = [0, 0, 0, 0]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+@pytest.mark.parametrize("dtype, bit_width", [
+    ("ARRAY_OF_SINT", 8),
+    ("ARRAY_OF_INT",  16),
+    ("ARRAY_OF_DINT", 32),
+])
+def test_roundtrip_min_max_sint_array(dtype: str, bit_width: int):
+    """Array of min and max values survives a round-trip."""
+    half = 1 << (bit_width - 1)
+    value = [-half, half - 1]
+    assert value == deserialize(serialize(value, name=dtype), name=dtype)
+
+
+# --- Explicit serialization checks ---
+
+@pytest.mark.parametrize("value, dtype, expected", [
+    # ARRAY_OF_SINT: 1 byte per element (signed)
+    ([0],        "ARRAY_OF_SINT", [0x00]),
+    ([-1],       "ARRAY_OF_SINT", [0xff]),
+    ([127],      "ARRAY_OF_SINT", [0x7f]),
+    ([-128],     "ARRAY_OF_SINT", [0x80]),
+    ([-1, 1],    "ARRAY_OF_SINT", [0xff, 0x01]),
+    # ARRAY_OF_INT: 2 bytes per element (signed, little-endian)
+    ([0],        "ARRAY_OF_INT",  [0x00, 0x00]),
+    ([-1],       "ARRAY_OF_INT",  [0xff, 0xff]),
+    ([1],        "ARRAY_OF_INT",  [0x01, 0x00]),
+    ([-1, 1],    "ARRAY_OF_INT",  [0xff, 0xff, 0x01, 0x00]),
+    ([(1 << 12)],"ARRAY_OF_INT",  [0x00, 0x10]),
+    # ARRAY_OF_DINT: 4 bytes per element (signed, little-endian)
+    ([0],        "ARRAY_OF_DINT", [0x00, 0x00, 0x00, 0x00]),
+    ([-1],       "ARRAY_OF_DINT", [0xff, 0xff, 0xff, 0xff]),
+    ([1],        "ARRAY_OF_DINT", [0x01, 0x00, 0x00, 0x00]),
+    ([-1, 1],    "ARRAY_OF_DINT", [0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00]),
+])
+def test_serialize_known_values_sint_array(value: list, dtype: str, expected: list[int]):
+    assert expected == serialize(value, name=dtype)
+
+
+# --- Explicit deserialization checks ---
+
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0x00],                               "ARRAY_OF_SINT", [0]),
+    ([0xff],                               "ARRAY_OF_SINT", [-1]),
+    ([0x7f],                               "ARRAY_OF_SINT", [127]),
+    ([0x80],                               "ARRAY_OF_SINT", [-128]),
+    ([0xff, 0x01],                         "ARRAY_OF_SINT", [-1, 1]),
+    ([0x00, 0x00],                         "ARRAY_OF_INT",  [0]),
+    ([0xff, 0xff],                         "ARRAY_OF_INT",  [-1]),
+    ([0xff, 0xff, 0x01, 0x00],             "ARRAY_OF_INT",  [-1, 1]),
+    ([0x00, 0x10],                         "ARRAY_OF_INT",  [1 << 12]),
+    ([0x00, 0x00, 0x00, 0x00],             "ARRAY_OF_DINT", [0]),
+    ([0xff, 0xff, 0xff, 0xff],             "ARRAY_OF_DINT", [-1]),
+    ([0xff, 0xff, 0xff, 0xff,
+      0x01, 0x00, 0x00, 0x00],             "ARRAY_OF_DINT", [-1, 1]),
+])
+def test_deserialize_known_values_sint_array(serialized: list[int], dtype: str, expected_value: list):
+    assert expected_value == deserialize(serialized, name=dtype)
+
+
+# ---------------------------------------------------------------------------
+# ARRAY_OF_REAL, ARRAY_OF_LREAL tests (float arrays)
+# ---------------------------------------------------------------------------
+
+# --- round-trip tests ---
+
+@pytest.mark.parametrize("dtype, gen", [
+    ("ARRAY_OF_REAL",  lambda: random.uniform(-3.4e38,  3.4e38)),
+    ("ARRAY_OF_LREAL", lambda: random.uniform(-1.7e308, 1.7e308)),
+])
+def test_roundtrip_random_float_array(dtype: str, gen):
+    """Serializing then deserializing a random float array returns the original."""
+    value = [gen() for _ in range(random.randint(1, 8))]
+    result = deserialize(serialize(value, name=dtype), name=dtype)
+    if dtype == "ARRAY_OF_REAL":
+        assert result == pytest.approx(value, rel=1e-6)
+    else:
+        assert result == value
+
+
+@pytest.mark.parametrize("dtype", ["ARRAY_OF_REAL", "ARRAY_OF_LREAL"])
+def test_roundtrip_zeros_float_array(dtype: str):
+    """Array of zeros survives a round-trip."""
+    value = [0.0, 0.0, 0.0]
+    assert deserialize(serialize(value, name=dtype), name=dtype) == value
+
+
+@pytest.mark.parametrize("dtype", ["ARRAY_OF_REAL", "ARRAY_OF_LREAL"])
+def test_roundtrip_inf_float_array(dtype: str):
+    """Infinity values survive a round-trip."""
+    value = [float("inf"), float("-inf")]
+    assert deserialize(serialize(value, name=dtype), name=dtype) == value
+
+
+@pytest.mark.parametrize("dtype", ["ARRAY_OF_REAL", "ARRAY_OF_LREAL"])
+def test_roundtrip_nan_float_array(dtype: str):
+    """NaN values survive a round-trip."""
+    value = [float("nan"), float("nan")]
+    result = deserialize(serialize(value, name=dtype), name=dtype)
+    assert all(isnan(r) for r in result)
+
+
+# --- Explicit serialization checks ---
+
+@pytest.mark.parametrize("value, dtype, expected", [
+    # ARRAY_OF_REAL: 4 bytes per element
+    ([0.0],        "ARRAY_OF_REAL",  [0x00, 0x00, 0x00, 0x00]),
+    ([1.0],        "ARRAY_OF_REAL",  [0x00, 0x00, 0x80, 0x3f]),
+    ([-1.0],       "ARRAY_OF_REAL",  [0x00, 0x00, 0x80, 0xbf]),
+    ([0.0, 1.0],   "ARRAY_OF_REAL",  [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3f]),
+    # ARRAY_OF_LREAL: 8 bytes per element
+    ([0.0],        "ARRAY_OF_LREAL", [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    ([1.0],        "ARRAY_OF_LREAL", [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f]),
+    ([-1.0],       "ARRAY_OF_LREAL", [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xbf]),
+])
+def test_serialize_known_values_float_array(value: list, dtype: str, expected: list[int]):
+    assert expected == serialize(value, name=dtype)
+
+
+# --- Explicit deserialization checks ---
+
+@pytest.mark.parametrize("serialized, dtype, expected_value", [
+    ([0x00, 0x00, 0x00, 0x00],             "ARRAY_OF_REAL",  [0.0]),
+    ([0x00, 0x00, 0x80, 0x3f],             "ARRAY_OF_REAL",  [1.0]),
+    ([0x00, 0x00, 0x80, 0xbf],             "ARRAY_OF_REAL",  [-1.0]),
+    ([0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x80, 0x3f],             "ARRAY_OF_REAL",  [0.0, 1.0]),
+    ([0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00],             "ARRAY_OF_LREAL", [0.0]),
+    ([0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0xf0, 0x3f],             "ARRAY_OF_LREAL", [1.0]),
+    ([0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0xf0, 0xbf],             "ARRAY_OF_LREAL", [-1.0]),
+])
+def test_deserialize_known_values_float_array(serialized: list[int], dtype: str, expected_value: list):
+    assert expected_value == pytest.approx(deserialize(serialized, name=dtype))
+
+
+# ---------------------------------------------------------------------------
+# General array property tests (all array types)
+# ---------------------------------------------------------------------------
+
+ALL_ARRAY_TYPES = [
+    "OCTET_STRING",
+    "ARRAY_OF_UINT", "ARRAY_OF_INT", "ARRAY_OF_SINT", "ARRAY_OF_DINT", "ARRAY_OF_UDINT",
+    "ARRAY_OF_BITARR8", "ARRAY_OF_BITARR16", "ARRAY_OF_BITARR32",
+    "ARRAY_OF_USINT", "ARRAY_OF_REAL", "ARRAY_OF_LREAL",
+]
+
+ELEMENT_BYTE_WIDTH = {
+    "OCTET_STRING":      1,
+    "ARRAY_OF_USINT":    1, "ARRAY_OF_SINT":    1, "ARRAY_OF_BITARR8":  1,
+    "ARRAY_OF_UINT":     2, "ARRAY_OF_INT":     2, "ARRAY_OF_BITARR16": 2,
+    "ARRAY_OF_UDINT":    4, "ARRAY_OF_DINT":    4, "ARRAY_OF_BITARR32": 4, "ARRAY_OF_REAL": 4,
+    "ARRAY_OF_LREAL":    8,
+}
+
+ELEMENT_GENERATORS = {
+    "OCTET_STRING":      lambda: format(random.randint(0, 0xff), "08b"),
+    "ARRAY_OF_USINT":    lambda: random.randint(0, 0xff),
+    "ARRAY_OF_UINT":     lambda: random.randint(0, 0xffff),
+    "ARRAY_OF_UDINT":    lambda: random.randint(0, 0xffffffff),
+    "ARRAY_OF_SINT":     lambda: random.randint(-128, 127),
+    "ARRAY_OF_INT":      lambda: random.randint(-32768, 32767),
+    "ARRAY_OF_DINT":     lambda: random.randint(-(1 << 31), (1 << 31) - 1),
+    "ARRAY_OF_BITARR8":  lambda: format(random.randint(0, 0xff), "08b"),
+    "ARRAY_OF_BITARR16": lambda: format(random.randint(0, 0xffff), "016b"),
+    "ARRAY_OF_BITARR32": lambda: format(random.randint(0, 0xffffffff), "032b"),
+    "ARRAY_OF_REAL":     lambda: random.uniform(-1e10, 1e10),
+    "ARRAY_OF_LREAL":    lambda: random.uniform(-1e100, 1e100),
+}
+
+
+@pytest.mark.parametrize("dtype", ALL_ARRAY_TYPES)
+def test_serialized_length_matches_element_count(dtype: str):
+    """Serialized byte count equals number of elements × bytes per element."""
+    n = random.randint(1, 8)
+    gen = ELEMENT_GENERATORS[dtype]
+    value = [gen() for _ in range(n)]
+    result = serialize(value, name=dtype)
+    assert len(result) == n * ELEMENT_BYTE_WIDTH[dtype]
+
+
+@pytest.mark.parametrize("dtype", ALL_ARRAY_TYPES)
+def test_empty_array_serializes_to_empty(dtype: str):
+    """An empty array serializes to an empty list."""
+    assert [] == serialize([], name=dtype)
+
+
+@pytest.mark.parametrize("dtype", ALL_ARRAY_TYPES)
+def test_empty_array_deserializes_to_empty(dtype: str):
+    """An empty list deserializes to an empty array."""
+    assert [] == deserialize([], name=dtype)
