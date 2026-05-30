@@ -76,6 +76,35 @@ public:
     return result->status_enable;
   }
 
+  template <typename T> auto sdo_read(
+    uint16_t device_id, uint16_t index, uint8_t subindex, uint8_t value_type = 0)
+  {
+    auto client = this->create_client<rise_motion_messages::srv::SDOReadSrv>("sdo_read");
+
+    while (!client->wait_for_service(std::chrono::seconds(1))) {
+      if (!rclcpp::ok()) {
+        return sdo::Result<T, std::string>::err({"Interrupted while waiting for sdo_read service"});
+      }
+    }
+
+    auto request = std::make_shared<rise_motion_messages::srv::SDOReadSrv::Request>();
+
+    request->device_id = device_id;
+    request->index = index;
+    request->subindex = subindex;
+    request->value_type = value_type;
+
+    auto future = client->async_send_request(request);
+
+    if (rclcpp::spin_until_future_complete(this, future) != rclcpp::FutureReturnCode::SUCCESS){
+      client->remove_pending_request(future);
+      return sdo::Result<T, std::string>::err({"Failed to call sdo_read service"});
+    }
+
+    return sdo::deserialize<T>(future.get()->value);
+  }
+
+
 private:
   std::vector<int> motor_pos;
   void print_motor_positions(std::vector<int32_t> const &motor_pos,
@@ -117,24 +146,15 @@ int main(int argc, char **argv) {
   while (!node->request_enable_ethercat()) {
   }
   
-  rclcpp::Client<rise_motion_messages::srv::SDOReadSrv>::SharedPtr
-      sdo_client;
-  sdo_client = node->create_client<rise_motion_messages::srv::SDOReadSrv>(
-      "sdo_read");
-  auto request = std::make_shared<rise_motion_messages::srv::SDOReadSrv::Request>();
-  request->device_id = 1;
-  request->index = 0x1008;
-  request->subindex = 0;
-  request->value_type = 0;
-  auto result = sdo_client->async_send_request(request);
-  // wait for result
-  if (rclcpp::spin_until_future_complete(node, result) ==
-    rclcpp::FutureReturnCode::SUCCESS)
-  {
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sdo_value: %s", (std::string(sdo::deserialize<sdo::STRING<50>>(result.get()->value))).std::string::c_str());
-  } else {
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service sdo_read");
+  auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 0);
+
+  if(!result){
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), result.error);
   }
+  else{
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sdo_value: %s", (std::string(result.value.std::string::c_str())));
+  }
+
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
