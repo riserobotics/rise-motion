@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import struct
-import uuid
 
 # ---------------------------------------------------------------------------
 # Record type
@@ -167,17 +166,27 @@ def serialize(
     name: str | None = None,
     base_data_type: str | None = None,
 ) -> list[int]:
-    object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-    
-    # serialize a base data type
-    if object_info.base_data_type[0:5] != "ARRAY":
-        return globals()[object_info.serialize_fn](value, object_info.bit_size)
-    # serialize a base data type list (imagine this: base_data_type[])
-    else:  
-        out = []
-        for item in value:
-            out.extend(globals()[object_info.serialize_fn](item, object_info.bit_size))
-        return out
+    """
+    Serializes any base data type from the tables 119 and 120 out of "ETG.1020 EtherCAT Protocol Enhancements".
+    Parameters:
+        - data to be serialized
+        - identifier of data's data type (index, name or base_data_type)
+    Refer to ETG.1000.6 and ETG.1020 at https://www.ethercat.org/en/downloads.html for details on encoding.
+    """
+    try:
+        object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
+        
+        # serialize a base data type
+        if object_info.base_data_type[0:5] != "ARRAY":
+            return globals()[object_info.serialize_fn](value, object_info.bit_size)
+        # serialize a base data type list (imagine this: base_data_type[])
+        else:  
+            out = []
+            for item in value:
+                out.extend(globals()[object_info.serialize_fn](item, object_info.bit_size))
+            return out
+    except:
+        return -1
 
 def deserialize(
     serialized_value: list[int],
@@ -187,36 +196,42 @@ def deserialize(
     base_data_type: str | None = None,
 ):
     """
-    
+    Deserializes any base data type from the tables 119 and 120 out of "ETG.1020 EtherCAT Protocol Enhancements".
+    Parameters:
+        - data to be serialized
+        - identifier of data's data type (index, name or base_data_type)
+    Refer to ETG.1000.6 and ETG.1020 at https://www.ethercat.org/en/downloads.html for details on encoding.
     """
-    if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
-        error_msg = f"serialized_value must be a list[int] not {type(serialized_value)}"
-        raise TypeError(error_msg)
-    object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-    byte_len = (object_info.bit_size + 7) // 8
-    isArray = object_info.base_data_type[0:5] == "ARRAY"
-    
-    # check if size of variably sized serialized object is plausible
-    if object_info.name[-6:] == "STRING" or isArray:
-        if len(serialized_value)%byte_len != 0:
-            raise ValueError(
-                f"number of bytes needed to contain variably sized list of Base Data Types must be" 
-                "evenly divisible by the byte-size of those Base Data Types ")
-    # check if size of serialized object is correct
-    else:
-        if byte_len != len(serialized_value):
-            raise ValueError(
-                f"number of bytes needed to contain object_info.bit_size must be equal to serialized_value length")
+    try:
+        if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
+            raise TypeError(f"serialized_value must be a list[int] not {type(serialized_value)} {serialized_value}")
+        object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
+        byte_len = (object_info.bit_size + 7) // 8
+        isArray = object_info.base_data_type[0:5] == "ARRAY"
+        
+        # check if size of variably sized serialized object is plausible
+        if object_info.name[-6:] == "STRING" or isArray:
+            if len(serialized_value)%byte_len != 0:
+                raise ValueError(
+                    f"Number of bytes needed to contain variably sized list of Base Data Types must be" 
+                    "evenly divisible by the byte-size of those Base Data Types.")
+        # check if size of serialized object is correct
+        else:
+            if byte_len != len(serialized_value):
+                raise ValueError(
+                    f"Number of bytes needed to contain object_info.bit_size must be equal to serialized_value length.")
 
-    # deserialize a serialized base data type
-    if not isArray:
-        return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)    
-    # deserialize a serialized base data type array (imagine this: base_data_type[])
-    else:
-        out = []
-        for i in range(0, len(serialized_value), byte_len):
-            out.append(globals()[object_info.deserialize_fn](serialized_value[i:i+byte_len], object_info.bit_size))
-        return out
+        # deserialize a serialized base data type
+        if not isArray:
+            return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)    
+        # deserialize a serialized base data type array (imagine this: base_data_type[])
+        else:
+            out = []
+            for i in range(0, len(serialized_value), byte_len):
+                out.append(globals()[object_info.deserialize_fn](serialized_value[i:i+byte_len], object_info.bit_size))
+            return out
+    except:
+        return -1
 
 # ---------------------------------------------------------------------------
 # Specific functions (called by generic functions)
@@ -226,15 +241,13 @@ def serialize_bitn(val, bit_s: int) -> list[int]:
     """
     Serialize a bit-string into a list[int].
     """
-    if type(val) is str:
-        vali = int(val, 2)
-    elif type(val) is int:
-        vali = val
-    else:
-        raise TypeError(f"val must be either int or str, not {type(val)} {val}")
+    if isinstance(val, str):
+        val = int(val, 2)
+    elif not isinstance(val, int):
+        raise TypeError(f"Input value must be either int or str, not {type(val)} {val}.")
 
     byte_len = (bit_s + 7) // 8
-    return list(vali.to_bytes(byte_len, byteorder="little"))
+    return list(val.to_bytes(byte_len, byteorder="little"))
 
 def deserialize_bitn(ser_val: list[int], bit_s: int) -> str:
     """
@@ -247,6 +260,8 @@ def serialize_int(val: int, bit_s: int) -> list[int]:
     """
     Serialize a signed int into a list[int].
     """
+    if not isinstance(val, int): 
+        raise TypeError(f"Input value must be an int, not {type(val)} {val}.")
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder="little", signed=True))
 
@@ -260,6 +275,8 @@ def serialize_uint(val: int, bit_s: int) -> list[int]:
     """
     Serialize an unsigned int into a list[int].
     """
+    if not isinstance(val, int): 
+        raise TypeError(f"Input value must be an int, not {type(val)} {val}.")
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder="little"))
 
@@ -273,6 +290,8 @@ def serialize_bool(val, bit_s: int) -> list[int]:
     """
     Serialize a bool into a list[int].
     """
+    if (not isinstance(val, bool)) and (val not in [1, 0]): 
+        raise TypeError(f"Input value must be a bool or the int 1 or 0, not {type(val)} {val}.")
     if val:
         return serialize_bitn(0xff, bit_s)
     else:
@@ -288,6 +307,8 @@ def serialize_float(val, bit_s: int) -> list[int]:
     """
     Serialize a float into a list[int].
     """
+    if not isinstance(val, float): 
+        raise TypeError(f"Input value must be a float, not {type(val)} {val}.")
     return list(struct.pack(f"<{'f' if bit_s == 32 else 'd'}", val))
 
 def deserialize_float(ser_val: list[int], bit_s: int) -> float:
@@ -298,18 +319,20 @@ def deserialize_float(ser_val: list[int], bit_s: int) -> float:
 
 def serialize_time_of_day(val, bit_s: int) -> list[int]:
     """
-    Takes either an int or str of bits describing the whole time48 struct 
-    or a tuple containing ms and days
+    Takes a tuple of ints containing ms since midnight and days since 01.01.1984
     """
+    if (len(val) is not 2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
+        raise TypeError(f"There needs to be a ms and a day value. They must be ints in a tuple, not {type(val)} {val}")
     if val[0] > (1<<28)-1:
-        raise OverflowError("the 4 most significant bits of number of milliseconds since midnight need to be 0")
+        raise OverflowError("the 4 most significant bits of number of ms since midnight need to be 0")
     return list(val[0].to_bytes(4, byteorder="big")) + list(val[1].to_bytes(2, byteorder="big"))
 
 def serialize_time_difference(val, bit_s: int) -> list[int]:
     """
-    Takes either an int or str of bits describing the whole time48 struct 
-    or a tuple containing ms and days
+    Takes a tuple of ints containing ms and days
     """
+    if (len(val) is not 2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
+        raise TypeError(f"There needs to be a ms and a day value. They must be ints in a tuple, not {type(val)} {val}")
     return list(val[0].to_bytes(4, byteorder="big")) + list(val[1].to_bytes(2, byteorder="big"))
 
 def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
@@ -322,6 +345,8 @@ def serialize_visible_string(val: str, bit_s: int) -> list[int]:
     """
     Serialize an ASCII encoded string into a list[int].
     """
+    if not isinstance(val, str): 
+        raise TypeError(f"Input value must be str, not {type(val)} {val}")
     return list(val.encode("ASCII"))
 
 def deserialize_visible_string(ser_val: list[int], bit_s: int) -> str:
@@ -334,6 +359,8 @@ def serialize_unicode_string(val: str, bit_s: int) -> list[int]:
     """
     Serialize a utf_16_le encoded string into a list[int].
     """
+    if not isinstance(val, str): 
+        raise TypeError(f"Input value must be str, not {type(val)} {val}")
     return list(val.encode("utf_16_le"))
 
 def deserialize_unicode_string(ser_val: list[int], bit_s: int) -> str:
