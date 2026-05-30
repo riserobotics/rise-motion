@@ -483,3 +483,80 @@ TEST(SDOSerializationTest, String50)
 
   ASSERT_EQ(std::string(result.value), str);
 }
+
+TEST(SDOSerializationTest, WString50)
+{
+  std::u16string str = u"RISE";
+
+  auto blob = sdo::serialize<sdo::WSTRING<50>>(str);
+  ASSERT_TRUE(blob);
+
+  ASSERT_EQ(blob.value.size(), 100);
+
+  ASSERT_EQ(blob.value[0], static_cast<std::uint8_t>('R'));
+  ASSERT_EQ(blob.value[1], 0);
+  ASSERT_EQ(blob.value[2], static_cast<std::uint8_t>('I'));
+  ASSERT_EQ(blob.value[3], 0);
+  ASSERT_EQ(blob.value[4], static_cast<std::uint8_t>('S'));
+  ASSERT_EQ(blob.value[5], 0);
+  ASSERT_EQ(blob.value[6], static_cast<std::uint8_t>('E'));
+  ASSERT_EQ(blob.value[7], 0);
+
+  for (std::size_t i = str.size() * 2; i < blob.value.size(); ++i)
+  {
+    ASSERT_EQ(blob.value[i], 0);
+  }
+
+  auto result = sdo::deserialize<sdo::WSTRING<50>>(blob.value);
+  ASSERT_TRUE(result);
+
+  ASSERT_EQ(std::u16string(result.value), str);
+}
+
+TEST(SDOSerializationTest, ArrayUInt16)
+{
+  sdo::ARRAY_OF_BITARR16<5> value{{1, 2, 3, 4, 5}};
+
+  auto blob = sdo::serialize<sdo::ARRAY_OF_BITARR16<5>>(value);
+  ASSERT_TRUE(blob);
+
+  ASSERT_EQ(blob.value.size(), 10);
+
+  ASSERT_EQ(blob.value[0], 1);
+  ASSERT_EQ(blob.value[1], 0);
+  ASSERT_EQ(blob.value[2], 2);
+  ASSERT_EQ(blob.value[3], 0);
+  ASSERT_EQ(blob.value[4], 3);
+  ASSERT_EQ(blob.value[5], 0);
+  ASSERT_EQ(blob.value[6], 4);
+  ASSERT_EQ(blob.value[7], 0);
+  ASSERT_EQ(blob.value[8], 5);
+  ASSERT_EQ(blob.value[9], 0);
+
+  auto result = sdo::deserialize<sdo::ARRAY_OF_BITARR16<5>>(blob.value);
+  ASSERT_TRUE(result);
+
+  ASSERT_EQ(result.value.value, value.value);
+}
+
+TEST(SDOSerializationTest, ArrayInt16)
+{
+  sdo::ARRAY_OF_INT<3> value{{0, 123, -1}};
+
+  auto blob = sdo::serialize<sdo::ARRAY_OF_INT<3>>(value);
+  ASSERT_TRUE(blob);
+
+  ASSERT_EQ(blob.value.size(), 6);
+
+  ASSERT_EQ(blob.value[0], 0);
+  ASSERT_EQ(blob.value[1], 0);
+  ASSERT_EQ(blob.value[2], 123);
+  ASSERT_EQ(blob.value[3], 0);
+  ASSERT_EQ(blob.value[4], 0xFF);
+  ASSERT_EQ(blob.value[5], 0xFF);
+
+  auto result = sdo::deserialize<sdo::ARRAY_OF_INT<3>>(blob.value);
+  ASSERT_TRUE(result);
+
+  ASSERT_EQ(result.value.value, value.value);
+}

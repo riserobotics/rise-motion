@@ -18,7 +18,8 @@ namespace sdo
     {
         None,
         InvalidSize,
-        OutOfRange
+        OutOfRange,
+        UnsupportedType
     };
 
     struct Error
@@ -194,6 +195,36 @@ namespace sdo
         }
     };
 
+    template <std::size_t N> struct WSTRING
+    {
+        std::u16string value;
+
+        WSTRING() = default;
+
+        WSTRING(std::u16string v) : value(std::move(v))
+        {}
+
+        operator std::u16string() const
+        {
+            return value;
+        }
+    };
+
+    template <typename T, std::size_t N> struct ARRAY
+    {
+        std::vector<T> value;
+
+        ARRAY() = default;
+
+        ARRAY(std::vector<T> v) : value(std::move(v))
+        {}
+
+        operator std::vector<T>() const
+        {
+            return value;
+        }
+    };
+
 
     template <typename T> using DeserializeResult = rise::Result<T, sdo::Error>;
     using SerializeResult = rise::Result<std::vector<std::uint8_t>, sdo::Error>;
@@ -243,6 +274,27 @@ namespace sdo
     using UNSIGNED56 = sdo::UInt56;
     using UNSIGNED64 = std::uint64_t;
 
+    using BITARR8   = std::uint8_t;
+    using BITARR16  = std::uint16_t;
+    using BITARR32  = std::uint32_t;
+
+    using BIT1  = std::uint8_t;
+    using BIT2  = std::uint8_t;
+    using BIT3  = std::uint8_t;
+    using BIT4  = std::uint8_t;
+    using BIT5  = std::uint8_t;
+    using BIT6  = std::uint8_t;
+    using BIT7  = std::uint8_t;
+    using BIT8  = std::uint8_t;
+    using BIT9  = std::uint16_t;
+    using BIT10  = std::uint16_t;
+    using BIT11  = std::uint16_t;
+    using BIT12  = std::uint16_t;
+    using BIT13  = std::uint16_t;
+    using BIT14  = std::uint16_t;
+    using BIT15  = std::uint16_t;
+    using BIT16  = std::uint16_t;
+
     using REAL32 = float;
     using REAL64 = double;
 
@@ -251,6 +303,19 @@ namespace sdo
 
     using GUID   = sdo::Guid;
     using DOMAIN = std::vector<std::uint8_t>;
+
+    template <std::size_t T> using VISIBLE_STRING = STRING<T>;
+    template <std::size_t T> using UNICODE_STRING = WSTRING<T>;
+    template <std::size_t N> using OKTET_STRING = ARRAY<std::uint8_t, N>;
+    template <std::size_t N> using ARRAY_OF_USINT = ARRAY<std::uint8_t, N>;
+    template <std::size_t N> using ARRAY_OF_UINT = ARRAY<std::uint16_t, N>;
+    template <std::size_t N> using ARRAY_OF_INT = ARRAY<std::int16_t, N>;
+    template <std::size_t N> using ARRAY_OF_SINT = ARRAY<std::int8_t, N>;
+    template <std::size_t N> using ARRAY_OF_DINT = ARRAY<std::int32_t, N>;
+    template <std::size_t N> using ARRAY_OF_UDINT = ARRAY<std::uint32_t, N>;
+    template <std::size_t N> using ARRAY_OF_BITARR8 = ARRAY<std::uint8_t, N>;
+    template <std::size_t N> using ARRAY_OF_BITARR16 = ARRAY<std::uint16_t, N>;
+    template <std::size_t N> using ARRAY_OF_BITARR32 = ARRAY<std::uint32_t, N>;
 }
 
 
@@ -266,6 +331,32 @@ namespace sdo::helpers
     {
         static constexpr std::size_t size = T;
     };
+
+    template <typename T> struct is_wstring_type : std::false_type {};
+    template <std::size_t T> struct is_wstring_type<sdo::WSTRING<T>> : std::true_type {};
+
+    template <typename T> struct wstring_size;
+    template <std::size_t T>struct wstring_size<sdo::WSTRING<T>>
+    {
+        static constexpr std::size_t size = T;
+    };
+
+    template <typename T> struct is_array_type : std::false_type {};
+    template <typename T, std::size_t N> 
+        struct is_array_type<sdo::ARRAY<T, N>> : std::true_type {};
+        
+    template <typename T> struct array_size;
+    template <typename T, std::size_t N>struct array_size<sdo::ARRAY<T, N>>
+    {
+        static constexpr std::size_t size = N;
+    };
+
+    template <typename T> struct elementType;
+    template <typename T, std::size_t N>struct elementType<sdo::ARRAY<T, N>>
+    {
+        using type = T;
+    };
+
 
     inline std::optional<sdo::Error> check_size(
         const std::vector<std::uint8_t>& blob, std::size_t expectedSize, const char* type)
@@ -337,9 +428,105 @@ namespace sdo
     template <typename T> [[nodiscard]] inline DeserializeResult<T> deserialize(
         const std::vector<std::uint8_t>& blob)
     {
-        if constexpr (sdo::helpers::is_string_type<std::remove_cv_t<std::remove_reference_t<T>>>::value){
-            
-            constexpr std::size_t size = sdo::helpers::string_size<T>::size;
+        using CleanT = std::remove_cv_t<std::remove_reference_t<T>>;
+
+        if constexpr (sdo::helpers::is_array_type<CleanT>::value)
+        {
+            constexpr std::size_t numElements = sdo::helpers::array_size<CleanT>::size;
+            using ElementT = typename sdo::helpers::elementType<CleanT>::type;
+            constexpr std::size_t elementSize = sizeof(ElementT);
+            constexpr std::size_t byteSize = numElements * elementSize;
+
+            if (blob.size() > byteSize || blob.size() % elementSize != 0){
+                return DeserializeResult<T>::err({
+                    ErrorCode::InvalidSize, "deserialize<ARRAY<T, N>>: invalid blob size"});
+            }
+
+            T result{};
+            result.value.reserve(blob.size() / elementSize);
+
+            for (std::size_t i = 0; i < blob.size(); i += elementSize){
+                if constexpr (elementSize == 1){
+                    result.value.push_back(static_cast<ElementT>(blob[i]));
+                }
+                else if constexpr (elementSize == 2){
+                    auto raw = sdo::helpers::to_raw<std::uint16_t>(blob, 2, i);
+                    if (!raw){
+                        return DeserializeResult<T>::err(raw.error);
+                    }
+
+                    result.value.push_back(static_cast<ElementT>(raw.value));
+                }
+                else if constexpr (elementSize == 4){
+                    auto raw = sdo::helpers::to_raw<std::uint32_t>(blob, 4, i);
+                    if (!raw){
+                        return DeserializeResult<T>::err(raw.error);
+                    }
+
+                    if constexpr (std::is_same_v<ElementT, float>){
+                        float element;
+                        std::memcpy(&element, &raw.value, sizeof(element));
+                        result.value.push_back(element);
+                    }
+                    else{
+                        result.value.push_back(static_cast<ElementT>(raw.value));
+                    }
+                }
+                else if constexpr (elementSize == 8){
+                    auto raw = sdo::helpers::to_raw<std::uint64_t>(blob, 8, i);
+                    if (!raw){
+                        return DeserializeResult<T>::err(raw.error);
+                    }
+
+                    if constexpr (std::is_same_v<ElementT, double>){
+                        double element;
+                        std::memcpy(&element, &raw.value, sizeof(element));
+                        result.value.push_back(element);
+                    }
+                    else{
+                        result.value.push_back(static_cast<ElementT>(raw.value));
+                    }
+                }
+                else{
+                    return DeserializeResult<T>::err({
+                        ErrorCode::UnsupportedType,
+                        "deserialize<ARRAY<T, N>>: unsupported array type"});
+                }
+            }
+
+            return DeserializeResult<T>::ok(std::move(result));
+        }
+        else if constexpr (sdo::helpers::is_wstring_type<CleanT>::value)
+        {
+            constexpr std::size_t size = sdo::helpers::wstring_size<CleanT>::size;
+
+            if (blob.size() > size * 2 || blob.size() % 2 != 0){
+                return DeserializeResult<T>::err({
+                    ErrorCode::InvalidSize,
+                    "deserialize<WSTRING<T>>: blob is larger than the expected size T"});
+            }
+
+            T str{};
+
+            for (std::size_t i = 0; i < blob.size(); i += 2){
+                std::uint16_t raw = 
+                    static_cast<std::uint16_t>(blob[i]) |
+                    static_cast<std::uint16_t>(blob[i + 1]) << 8;
+
+                str.value.push_back(static_cast<char16_t>(raw));
+            }
+
+            // strip padding zeros
+            while (!str.value.empty() && str.value.back() == u'\0'){
+                str.value.pop_back();
+            }
+
+            return DeserializeResult<T>::ok(str);
+        }
+        else if constexpr (sdo::helpers::is_string_type<CleanT>::value)
+        {
+        
+            constexpr std::size_t size = sdo::helpers::string_size<CleanT>::size;
 
             if (blob.size() > size){
                 return DeserializeResult<T>::err({
@@ -347,16 +534,16 @@ namespace sdo
                     "deserialize<STRING<T>>: blob is larger than the expected size T"});
             }
 
-            T string{};
+            T str{};
 
-            string.value.assign(blob.begin(), blob.end());
+            str.value.assign(blob.begin(), blob.end());
 
             // strip padding zeros
-            while (!string.value.empty() && string.value.back() == '\0'){
-                string.value.pop_back();
+            while (!str.value.empty() && str.value.back() == '\0'){
+                str.value.pop_back();
             }
 
-            return DeserializeResult<T>::ok(string);
+            return DeserializeResult<T>::ok(str);
         }
         else{
             static_assert(sdo::helpers::always_false<T>, "deserialize<T>: unsupported type");
@@ -746,7 +933,109 @@ namespace sdo
 
     template <typename T> SerializeResult serialize(const T& value)
     {
-        if constexpr (sdo::helpers::is_string_type<std::remove_cv_t<std::remove_reference_t<T>>>::value){
+        using CleanT = std::remove_cv_t<std::remove_reference_t<T>>;
+
+        if constexpr (sdo::helpers::is_array_type<CleanT>::value)
+        {
+            constexpr std::size_t numElements = sdo::helpers::array_size<CleanT>::size;
+            using ElementT = typename sdo::helpers::elementType<CleanT>::type;
+            constexpr std::size_t elementSize = sizeof(ElementT);
+            constexpr std::size_t byteSize = numElements * elementSize;
+
+            if (value.value.size() > numElements){
+                return SerializeResult::err({
+                    ErrorCode::OutOfRange,
+                    "serialize<ARRAY<T, N>>: array is longer than size N"
+                });
+            }
+
+            std::vector<std::uint8_t> blob;
+            blob.reserve(byteSize);
+
+            for (const auto& element : value.value){
+                if constexpr (elementSize == 1){
+                    const auto raw = static_cast<std::uint8_t>(element);
+
+                    blob.push_back(raw);
+                }
+                else if constexpr (elementSize == 2){
+                    const auto raw = static_cast<std::uint16_t>(element);
+
+                    blob.push_back(static_cast<std::uint8_t>(raw & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 8) & 0xFF));
+                }
+                else if constexpr (elementSize == 4){
+                    std::uint32_t raw;
+
+                    if constexpr (std::is_same_v<ElementT, float>){
+                        std::memcpy(&raw, &element, sizeof(raw));
+                    }
+                    else{
+                        raw = static_cast<std::uint32_t>(element);
+                    }
+
+                    blob.push_back(static_cast<std::uint8_t>(raw & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 8) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 16) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 24) & 0xFF));
+                }
+                else if constexpr (elementSize == 8){
+                    std::uint64_t raw;
+
+                    if constexpr (std::is_same_v<ElementT, double>){
+                        std::memcpy(&raw, &element, sizeof(raw));
+                    }
+                    else{
+                        raw = static_cast<std::uint64_t>(element);
+                    }
+
+                    blob.push_back(static_cast<std::uint8_t>(raw & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 8) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 16) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 24) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 32) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 40) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 48) & 0xFF));
+                    blob.push_back(static_cast<std::uint8_t>((raw >> 56) & 0xFF));
+                }
+                else{
+                    return SerializeResult::err({
+                        ErrorCode::UnsupportedType,
+                        "serialize<ARRAY<T, N>>: unsupported array type"});
+                }
+            }
+
+            blob.resize(byteSize, 0);
+
+            return SerializeResult::ok(std::move(blob));
+        }
+        else if constexpr (sdo::helpers::is_wstring_type<CleanT>::value)
+        {
+            constexpr std::size_t size = sdo::helpers::wstring_size<CleanT>::size;
+
+            if (value.value.size() > size)
+            {
+                return SerializeResult::err({
+                    ErrorCode::InvalidSize, "serialize<WSTRING<T>>: string is longer than size T"});
+            }
+
+            std::vector<std::uint8_t> blob;
+            blob.reserve(size * 2);
+
+            for (char16_t c : value.value)
+            {
+                std::uint16_t raw = static_cast<std::uint16_t>(c);
+
+                blob.push_back(static_cast<std::uint8_t>(raw & 0xFF));
+                blob.push_back(static_cast<std::uint8_t>((raw >> 8) & 0xFF));
+            }
+
+            blob.resize(size * 2, '\0');
+
+            return SerializeResult::ok(std::move(blob));
+        }
+        else if constexpr (sdo::helpers::is_string_type<CleanT>::value)
+        {
 
             constexpr std::size_t size = sdo::helpers::string_size<T>::size;
 
