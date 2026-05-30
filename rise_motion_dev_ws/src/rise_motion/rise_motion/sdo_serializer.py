@@ -29,8 +29,8 @@ BASE_DATA_TYPES: dict[int, TypeInfo] = {
     0x0020: TypeInfo(0x0020, "DWORD",          "DWORD",  32,  "serialize_bitn",  "deserialize_bitn"),
 
     # Time types (48-bit, special structure)
-    0x000C: TypeInfo(0x000C, "TIME_OF_DAY",    "TIME_OF_DAY",    48, "serialize_time48",  "deserialize_time48"),
-    0x000D: TypeInfo(0x000D, "TIME_DIFFERENCE","TIME_DIFFERENCE", 48, "serialize_time48",  "deserialize_time48"),
+    0x000C: TypeInfo(0x000C, "TIME_OF_DAY",    "TIME_OF_DAY",    48, "serialize_time_of_day",  "deserialize_time48"),
+    0x000D: TypeInfo(0x000D, "TIME_DIFFERENCE","TIME_DIFFERENCE", 48, "serialize_time_difference",  "deserialize_time48"),
 
     # Bit strings BIT1 - BIT16
     0x0030: TypeInfo(0x0030, "BIT1",  "BIT1",   1,  "serialize_bitn", "deserialize_bitn"),
@@ -296,25 +296,27 @@ def deserialize_float(ser_val: list[int], bit_s: int) -> float:
     """
     return struct.unpack(f"<{'f' if bit_s == 32 else 'd'}", bytes(ser_val))[0]
 
-def serialize_time48(val, bit_s: int) -> list[int]:
+def serialize_time_of_day(val, bit_s: int) -> list[int]:
     """
     Takes either an int or str of bits describing the whole time48 struct 
     or a tuple containing ms and days
     """
-    if not isinstance(val, (str, int)):
-        ms = format(val[0], '028b')   # UNSIGNED28 ms
-        void = "0000"                 # VOID4 reserved
-        days = format(val[1], '016b') # UNSIGNED16 days     
-        val = ms+void+days
-    
-    return serialize_bitn(val, bit_s)
+    if val[0] > (1<<28)-1:
+        raise OverflowError("the 4 most significant bits of number of milliseconds since midnight need to be 0")
+    return list(val[0].to_bytes(4, byteorder="big")) + list(val[1].to_bytes(2, byteorder="big"))
+
+def serialize_time_difference(val, bit_s: int) -> list[int]:
+    """
+    Takes either an int or str of bits describing the whole time48 struct 
+    or a tuple containing ms and days
+    """
+    return list(val[0].to_bytes(4, byteorder="big")) + list(val[1].to_bytes(2, byteorder="big"))
 
 def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
     """
     Takes list[int] and returns a tuple containing ms and days
     """
-    bits = deserialize_bitn(ser_val, bit_s)
-    return (int(bits[0:28], base=2), int(bits[32:48], base=2))
+    return (int.from_bytes(ser_val[:4], byteorder="big"), int.from_bytes(ser_val[4:], byteorder="big"))
 
 def serialize_visible_string(val: str, bit_s: int) -> list[int]:
     """

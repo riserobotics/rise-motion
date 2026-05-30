@@ -358,8 +358,8 @@ def test_roundtrip_max_time48(dtype: str):
 # --- Explicit serialization checks (known input -> known list[int]) ---
 
 @pytest.mark.parametrize("value, dtype, expected", [
-    ((5000, 5000), "TIME_OF_DAY", [0x88, 0x13, 0x80, 0x38, 0x01, 0x00]),
-    ((1000, 1000), "TIME_DIFFERENCE", [0xE8, 0x03, 0x80, 0x3E, 0x00, 0x00]),
+    ((5000, 5000), "TIME_OF_DAY", [0x00, 0x00, 0x13, 0x88, 0x13, 0x88]),
+    ((1000, 1000), "TIME_DIFFERENCE", [0x00, 0x00, 0x03, 0xE8, 0x03, 0xE8]),
 ])
 def test_serialize_known_values_time48(value: int, dtype: str, expected: list[int]):
     assert expected == serialize(value, name=dtype)
@@ -368,8 +368,8 @@ def test_serialize_known_values_time48(value: int, dtype: str, expected: list[in
 # --- Explicit deserialization checks (known list[int] -> known output) ---
 
 @pytest.mark.parametrize("serialized, dtype, expected_value", [
-    ([0x88, 0x13, 0x80, 0x38, 0x01, 0x00], "TIME_OF_DAY", (5000, 5000)),
-    ([0xE8, 0x03, 0x80, 0x3E, 0x00, 0x00], "TIME_DIFFERENCE", (1000, 1000)),
+    ([0x00, 0x00, 0x13, 0x88, 0x13, 0x88], "TIME_OF_DAY", (5000, 5000)),
+    ([0x00, 0x00, 0x03, 0xE8, 0x03, 0xE8], "TIME_DIFFERENCE", (1000, 1000)),
 ])
 def test_deserialize_known_values_time48(serialized: list[int], dtype: str, expected_value: int):
     assert expected_value == deserialize(serialized, name=dtype)
