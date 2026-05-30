@@ -376,14 +376,15 @@ def test_deserialize_known_values_time48(serialized: list[int], dtype: str, expe
 
 
 # ---------------------------------------------------------------------------
-# TIME_OF_DAY, TIME_DIFFERENCE tests
+# GUID tests
 # ---------------------------------------------------------------------------
 
 # --- round-trip test ---
 
 def test_roundtrip_random_guid():
     """Serializing then deserializing a random valid value returns the original."""
-    value = uuid.uuid4()
+    max_val = 1 << (128-1)
+    value = random.randint(-max_val, (max_val-1))
     assert value == deserialize(serialize(value, base_data_type="GUID"), base_data_type="GUID")
 
 

@@ -79,8 +79,8 @@ BASE_DATA_TYPES: dict[int, TypeInfo] = {
     0x0008: TypeInfo(0x0008, "REAL32", "REAL",  32, "serialize_float", "deserialize_float"),
     0x0011: TypeInfo(0x0011, "REAL64", "LREAL", 64, "serialize_float", "deserialize_float"),
 
-    # GUID
-    0x001D: TypeInfo(0x001D, "GUID", "GUID", 128, "serialize_guid", "deserialize_guid"),
+    # GUID (according to specifications value is stored as a 128-bit integer)
+    0x001D: TypeInfo(0x001D, "GUID", "GUID", 128, "serialize_int", "deserialize_int"),
 
     # - Base Data Types with variable length -
     # Strings
@@ -315,21 +315,6 @@ def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
     """
     bits = deserialize_bitn(ser_val, bit_s)
     return (int(bits[0:28], base=2), int(bits[32:48], base=2))
-
-def serialize_guid(val, bit_s: int) -> list[int]:
-    """
-    Serialize a UUID into a list[int].
-    Accepts a uuid.UUID object or a GUID string e.g. "550e8400-e29b-41d4-a716-446655440000".
-    """
-    if isinstance(val, str):
-        val = uuid.UUID(val)
-    return list(val.bytes_le)
-
-def deserialize_guid(ser_val: list[int], bit_s: int) -> uuid.UUID:
-    """
-    Deserialize a list[int] into a uuid.UUID.
-    """
-    return uuid.UUID(bytes_le=bytes(ser_val))
 
 def serialize_visible_string(val: str, bit_s: int) -> list[int]:
     """
