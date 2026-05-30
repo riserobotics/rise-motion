@@ -83,7 +83,8 @@ public:
 
     while (!client->wait_for_service(std::chrono::seconds(1))) {
       if (!rclcpp::ok()) {
-        return sdo::Result<T, std::string>::err({"Interrupted while waiting for sdo_read service"});
+        return rise::Result<T, sdo::Error>::err({
+          sdo::ErrorCode::ServiceUnavailable, "Interrupted while waiting for sdo_read service"});
       }
     }
 
@@ -96,9 +97,11 @@ public:
 
     auto future = client->async_send_request(request);
 
-    if (rclcpp::spin_until_future_complete(this, future) != rclcpp::FutureReturnCode::SUCCESS){
+    if (rclcpp::spin_until_future_complete(
+      this->get_node_base_interface(), future) != rclcpp::FutureReturnCode::SUCCESS){
       client->remove_pending_request(future);
-      return sdo::Result<T, std::string>::err({"Failed to call sdo_read service"});
+      return rise::Result<T, sdo::Error>::err({
+        sdo::ErrorCode::CallFailed, "Failed to call sdo_read service"});
     }
 
     return sdo::deserialize<T>(future.get()->value);
@@ -149,10 +152,10 @@ int main(int argc, char **argv) {
   auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 0);
 
   if(!result){
-    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), result.error);
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), result.error.message.std::string::c_str());
   }
   else{
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sdo_value: %s", (std::string(result.value.std::string::c_str())));
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sdo_value: %s", (std::string(result.value).std::string::c_str()));
   }
 
   rclcpp::spin(node);

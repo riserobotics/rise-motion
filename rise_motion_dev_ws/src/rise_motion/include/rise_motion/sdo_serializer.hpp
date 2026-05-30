@@ -19,7 +19,9 @@ namespace sdo
         None,
         InvalidSize,
         OutOfRange,
-        UnsupportedType
+        UnsupportedType,
+        CallFailed,
+        ServiceUnavailable
     };
 
     struct Error
