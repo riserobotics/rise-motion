@@ -14,6 +14,10 @@ include_directories(include)
 
 add_subdirectory(SOEM)
 
+# --- sdo_serializer library ---
+add_library(sdo_serializer_lib INTERFACE)
+target_include_directories(sdo_serializer_lib INTERFACE include)
+
 add_executable(
 	rise_motion_main
 	src/main.cpp
@@ -52,6 +56,7 @@ install(TARGETS
 )
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_gtest REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files
   set(ament_cmake_copyright_FOUND TRUE)
@@ -60,6 +65,15 @@ if(BUILD_TESTING)
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  # --- sdo_serializer test ---
+  ament_add_gtest(test_sdo_serializer
+    test/test_sdo_serializer.cpp
+  )
+  if(TARGET test_sdo_serializer)
+    target_link_libraries(test_sdo_serializer sdo_serializer_lib)
+  endif()
+
 endif()
 
 ament_package()
