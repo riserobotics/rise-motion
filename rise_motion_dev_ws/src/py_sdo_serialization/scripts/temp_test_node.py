@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# execute this using 
+# python3 path/to/this/file
+
 import sys
 import rclpy
 from rclpy.node import Node
@@ -56,7 +59,7 @@ class TestNode(Node):
 
     def request_enable_ethercat(self) -> bool:
         """Returns True on success (mirrors the C++ int == 0 success check)."""
-        self.get_logger().info("Incrementing motor position with %d", self.increment)
+        self.get_logger().info(f"Incrementing motor position with {self.increment}")
         self.get_logger().info("Requesting Enable Ethercat")
 
         while not self.enable_client.wait_for_service(timeout_sec=1.0):
@@ -149,7 +152,7 @@ def main():
             type_name=p[3],
         )
 
-        if result is -1:
+        if result == -1:
             rclpy.get_logger("rclcpp").error(f"SDO read {p[1]} {p[3]} failed")
         else:
             node.get_logger().info(f"sdo read value {p[1]} {p[3]}: %s", str(result))

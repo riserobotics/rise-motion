@@ -321,7 +321,7 @@ def serialize_time_of_day(val, bit_s: int) -> list[int]:
     """
     Takes a tuple of ints containing ms since midnight and days since 01.01.1984
     """
-    if (len(val) is not 2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
+    if (len(val) !=  2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
         raise TypeError(f"There needs to be a ms and a day value. They must be ints in a tuple, not {type(val)} {val}")
     if val[0] > (1<<28)-1:
         raise OverflowError("the 4 most significant bits of number of ms since midnight need to be 0")
@@ -331,7 +331,7 @@ def serialize_time_difference(val, bit_s: int) -> list[int]:
     """
     Takes a tuple of ints containing ms and days
     """
-    if (len(val) is not 2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
+    if (len(val) != 2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
         raise TypeError(f"There needs to be a ms and a day value. They must be ints in a tuple, not {type(val)} {val}")
     return list(val[0].to_bytes(4, byteorder="big")) + list(val[1].to_bytes(2, byteorder="big"))
 
