@@ -12,7 +12,10 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/StateCurrentMsg.msg"
   "msg/StateNoticeMsg.msg"
+  "msg/MotorPositions.msg"
   "srv/EnableEthercatSrv.srv"
+  "srv/SDOReadSrv.srv"
+  "srv/SDOWriteSrv.srv"
  )
 
 if(BUILD_TESTING)
