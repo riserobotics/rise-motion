@@ -72,15 +72,9 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   # --- sdo_serializer test ---
-  ament_add_gtest(test_sdo_serializer
-    test/test_sdo_serializer.cpp
-  )
   ament_add_pytest_test(test_sdo_serializer_python 
     test/test_sdo_serializer.py
   )
-  if(TARGET test_sdo_serializer)
-    target_link_libraries(test_sdo_serializer sdo_serializer_lib)
-  endif()
 
 endif()
 
