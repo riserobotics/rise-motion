@@ -1045,7 +1045,7 @@ namespace sdo
             if (value.value.size() > size){
                 return SerializeResult::err({
                     ErrorCode::InvalidSize, std::string("serialize<STRING<T>>: string is longer than size T. Expected: ") + 
-                    std::to_string(size) + ", got: " + value.value.size()});
+                    std::to_string(size) + ", got: " + std::to_string(value.value.size())});
             }
 
             std::vector<std::uint8_t> blob(value.value.begin(), value.value.end());
