@@ -118,7 +118,7 @@ void EthercatNode::sdoReadServiceCallback(
 
   std::vector<uint8> value;
   bool success = ec_manager_.sdo_read(request->device_id, request->index,
-				      request->subindex, value);
+				      request->subindex, value, request->value_size);
 
     if (!success) {
     RCLCPP_WARN(get_logger(), "Read failed");

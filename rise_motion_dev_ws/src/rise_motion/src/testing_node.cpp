@@ -78,7 +78,7 @@ public:
   }
 
   template <typename T> auto sdo_read(
-    uint16_t device_id, uint16_t index, uint8_t subindex, uint8_t value_type = 0)
+    uint16_t device_id, uint16_t index, uint8_t subindex, uint8_t value_size, uint8_t value_type = 0)
   {
     auto client = this->create_client<rise_motion_messages::srv::SDOReadSrv>("sdo_read");
 
@@ -94,6 +94,7 @@ public:
     request->device_id = device_id;
     request->index = index;
     request->subindex = subindex;
+    request->value_size = value_size;
     request->value_type = value_type;
 
     auto future = client->async_send_request(request);
@@ -188,8 +189,8 @@ int main(int argc, char **argv) {
   while (!node->request_enable_ethercat()) {
   }
   
-  auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 0);
-
+  // example sdo read
+  auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 0, 50);
   if(!result){
     RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), result.error.message.std::string::c_str());
   }

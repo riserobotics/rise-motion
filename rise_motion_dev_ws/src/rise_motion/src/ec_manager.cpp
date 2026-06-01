@@ -309,8 +309,8 @@ uint16 ECManager::transition_ec(uint16 state) {
 }
 
 bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
-                         std::vector<uint8> &value) {
-  int psize = 64;
+                         std::vector<uint8> &value, uint8 value_size) {
+  int psize = value_size;
   uint8 *buf = new uint8[psize];
 
   boolean CA = FALSE;
