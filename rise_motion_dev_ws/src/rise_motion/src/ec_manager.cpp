@@ -329,7 +329,7 @@ bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
 bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
                           std::vector<uint8> &value) {
   int psize = value.size();
-  uint8 *buf = new uint8[psize];
+  uint8 *buf = &value[0];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
