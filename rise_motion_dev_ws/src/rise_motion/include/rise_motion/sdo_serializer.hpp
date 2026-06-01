@@ -533,7 +533,8 @@ namespace sdo
             if (blob.size() > size){
                 return DeserializeResult<T>::err({
                     ErrorCode::InvalidSize, 
-                    "deserialize<STRING<T>>: blob is larger than the expected size T"});
+                    std::string("deserialize<STRING<T>>: blob is larger than the expected size T. Expected: ") + 
+                    std::to_string(size) + ", got: " + std::to_string(blob.size())});
             }
 
             T str{};
@@ -1043,7 +1044,8 @@ namespace sdo
 
             if (value.value.size() > size){
                 return SerializeResult::err({
-                    ErrorCode::InvalidSize, "serialize<STRING<T>>: string is longer than size T"});
+                    ErrorCode::InvalidSize, std::string("serialize<STRING<T>>: string is longer than size T. Expected: ") + 
+                    std::to_string(size) + ", got: " + value.value.size()});
             }
 
             std::vector<std::uint8_t> blob(value.value.begin(), value.value.end());
