@@ -343,17 +343,17 @@ def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
 
 def serialize_visible_string(val: str, bit_s: int) -> list[int]:
     """
-    Serialize an ASCII encoded string into a list[int].
+    Serialize an UTF-8 encoded string into a list[int].
     """
     if not isinstance(val, str): 
         raise TypeError(f"Input value must be str, not {type(val)} {val}")
-    return list(val.encode("ASCII"))
+    return list(val.encode("UTF-8"))
 
 def deserialize_visible_string(ser_val: list[int], bit_s: int) -> str:
     """
-    Deerialize a list[int] into an ASCII encoded string.
+    Deerialize a list[int] into an UTF-8 encoded string.
     """
-    return bytes(ser_val).decode("ASCII")
+    return bytes(ser_val).decode("UTF-8")
 
 def serialize_unicode_string(val: str, bit_s: int) -> list[int]:
     """
