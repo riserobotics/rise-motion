@@ -138,18 +138,21 @@ def main():
     while not node.request_enable_ethercat():
         pass
 
-    # Read device name (object 0x1008, sub 0) as a VISIBLE_STRING
-    result = node.sdo_read(
-        device_id=1,
-        index=0x1008,
-        subindex=0,
-        type_name="VISIBLE_STRING",
-    )
+    for p in [
+        [1,0x1008,0,"VISIBLE_STRING"], [1,0x1000,0,"UDINT"], 
+        [1,0x1005,0,"DINT"], [1,0x1018,1,"UDINT"]]:
+        # Read device name (object 0x1008, sub 0) as a VISIBLE_STRING
+        result = node.sdo_read(
+            device_id=p[0],
+            index=p[1],
+            subindex=p[2],
+            type_name=p[3],
+        )
 
-    if result is -1:
-        rclpy.get_logger("rclcpp").error("SDO read failed")
-    else:
-        node.get_logger().info("sdo_value: %s", str(result))
+        if result is -1:
+            rclpy.get_logger("rclcpp").error(f"SDO read {p[1]} {p[3]} failed")
+        else:
+            node.get_logger().info(f"sdo read value {p[1]} {p[3]}: %s", str(result))
 
     rclpy.spin(node)
     rclpy.shutdown()
