@@ -166,13 +166,28 @@ def serialize(
     name: str | None = None,
     base_data_type: str | None = None,
 ) -> list[int]:
+    """Serialize a value according to an EtherCAT base data type.
+
+    The data type can be identified by its index, name, or base data type
+    string. Providing one is sufficient.
+
+    For definitions of supported base data types and encoding see see ETG.1000.6 and ETG.1020 at 
+    https://www.ethercat.org/en/downloads.html
+
+    :param value:
+        Value to serialize.
+    :param index:
+        EtherCAT data type index.
+    :param name:
+        EtherCAT data type name.
+    :param base_data_type:
+        Data type making up this base data type. Called "Type" in Somanet Circulo Object Dictionary reference.
+    :returns:
+        Serialized value as a list of bytes.
+    :rtype:
+        list[int]
     """
-    Serializes any base data type from the tables 119 and 120 out of "ETG.1020 EtherCAT Protocol Enhancements".
-    Parameters:
-        - data to be serialized
-        - identifier of data's data type (index, name or base_data_type)
-    Refer to ETG.1000.6 and ETG.1020 at https://www.ethercat.org/en/downloads.html for details on encoding.
-    """
+
     try:
         object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
         
@@ -195,12 +210,24 @@ def deserialize(
     name: str | None = None,
     base_data_type: str | None = None,
 ):
-    """
-    Deserializes any base data type from the tables 119 and 120 out of "ETG.1020 EtherCAT Protocol Enhancements".
-    Parameters:
-        - data to be serialized
-        - identifier of data's data type (index, name or base_data_type)
-    Refer to ETG.1000.6 and ETG.1020 at https://www.ethercat.org/en/downloads.html for details on encoding.
+    """Deserializes a list of bytes representing an EtherCAT base data type.
+
+    The data type can be identified by its index, name, or base data type
+    string. Providing one is sufficient.
+
+    For definitions of supported base data types and encoding see see ETG.1000.6 and ETG.1020 at 
+    https://www.ethercat.org/en/downloads.html
+
+    :param serialized_value:
+        Bytes to deserialize.
+    :param index:
+        EtherCAT data type index.
+    :param name:
+        EtherCAT data type name.
+    :param base_data_type:
+        Data type making up this base data type. Called "Type" in Somanet Circulo Object Dictionary reference.
+    :returns:
+        Deserialized value as a fitting python data type.
     """
     try:
         if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
