@@ -2,7 +2,6 @@
 import pytest
 import random
 from math import isnan
-import uuid
 from py_sdo_serializer.sdo_serializer import serialize, deserialize
 
 # ---------------------------------------------------------------------------
@@ -428,13 +427,16 @@ def test_serialize_known_values_visible_string(value: str, expected: list[int]):
 # --- Explicit deserialization checks (known list[int] -> known output) ---
 
 @pytest.mark.parametrize("serialized, expected_value", [
-    ([0x41],             "A"),
-    ([0x41, 0x42],       "AB"),
-    ([0x68, 0x69],       "hi"),
-    ([],                 ""),
-    ([0x00],             "\x00"),
-    ([0x20],             " "),
-    ([0x41, 0x42, 0x43], "ABC"),
+    ([0x41],                                     "A"),          
+    ([0x41, 0x42],                               "AB"),        
+    ([0x68, 0x69],                               "hi"),        
+    ([],                                         ""),           
+    ([0x00],                                     "\x00"),      
+    ([0x20],                                     " "),         
+    ([0x41, 0x42, 0x43],                         "ABC"),
+    ([0x63, 0x61, 0x66, 0xC3, 0xA9],             "café"),       # 2-byte sequence: é = 0xC3 0xA9
+    ([0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 0xE8, 0xAA, 0x9E], "日本語"),  # 3-byte sequences
+    ([0xF0, 0x9F, 0x98, 0x80],                   "😀"),         # 4-byte sequence
 ])
 def test_deserialize_known_values_visible_string(serialized: list[int], expected_value: str):
     assert expected_value == deserialize(serialized, name="VISIBLE_STRING")
@@ -443,12 +445,11 @@ def test_deserialize_known_values_visible_string(serialized: list[int], expected
 # --- Invalid input ---
 
 @pytest.mark.parametrize("value", [
-    "café",      # non-ASCII (é is > 0x7F, invalid for VISIBLE_STRING)
-    "日本語",    # CJK characters
-    "😀",        # emoji
+    ["h", "b"],       
+    5
 ])
-def test_serialize_visible_string_rejects_non_ascii(value: str):
-    """Characters outside the visible ASCII range should raise."""
+def test_serialize_visible_string_rejects_invalid(value: str):
+    """Byte sequences that are not valid UTF-8 should raise."""
     assert -1 == serialize(value, name="VISIBLE_STRING")
 
 
