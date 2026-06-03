@@ -10,7 +10,7 @@
 #include <cstring>
 #include <cstddef>
 #include <cmath>
-#include "result.hpp"
+#include <rise_motion/result.hpp>
 
 namespace sdo
 {
