@@ -3,7 +3,7 @@ import pytest
 import random
 from math import isnan
 import uuid
-from rise_motion.sdo_serializer import serialize, deserialize
+from py_sdo_serializer.sdo_serializer import serialize, deserialize
 
 # ---------------------------------------------------------------------------
 # Bit strings BIT1 - BIT16 tests

@@ -8,7 +8,7 @@ import rclpy
 from rclpy.node import Node
 from rise_motion_messages.msg import MotorPositions
 from rise_motion_messages.srv import EnableEthercatSrv, SDOReadSrv
-from sdo_serializer import deserialize, serialize
+from rise_motion_dev_ws.src.py_sdo_serialization.sdo_serializer import deserialize, serialize
 
 
 class TestNode(Node):
