@@ -308,7 +308,7 @@ namespace sdo
 
     template <std::size_t T> using VISIBLE_STRING = STRING<T>;
     template <std::size_t T> using UNICODE_STRING = WSTRING<T>;
-    template <std::size_t N> using OKTET_STRING = ARRAY<std::uint8_t, N>;
+    template <std::size_t N> using OCTET_STRING = ARRAY<std::uint8_t, N>;
     template <std::size_t N> using ARRAY_OF_USINT = ARRAY<std::uint8_t, N>;
     template <std::size_t N> using ARRAY_OF_UINT = ARRAY<std::uint16_t, N>;
     template <std::size_t N> using ARRAY_OF_INT = ARRAY<std::int16_t, N>;
