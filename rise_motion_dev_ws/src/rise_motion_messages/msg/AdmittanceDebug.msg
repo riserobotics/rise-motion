@@ -8,7 +8,8 @@ float64[] adc_voltage_raw   # [V]      ADC ticks -> voltage (uncalibrated, 0..5V
 float64[] adc_voltage       # [V]      ADC ticks -> voltage (centered: 0V = no force)
 float64[] force             # [N]      voltage -> force (before clipping)
 float64[] force_clipped     # [N]      after f_max clipping
-float64[] torque_raw        # [Nm]     force_clipped * lever_arm -> input to controller
+float64[] force_filtered    # [N]      after EMA low-pass filter (input to controller)
+float64[] torque_raw        # [Nm]     force_filtered * lever_arm -> input to controller
 
 # Absolute motor position (encoder ticks / enc_per_rad) — same reference as pos_min/max limits
 float64[] pos_rad           # [rad]      absolute encoder position
