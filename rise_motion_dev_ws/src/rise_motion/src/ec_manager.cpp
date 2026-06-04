@@ -107,6 +107,8 @@ void ECManager::cyclic_loop() {
   std::vector<int16_t> torque_offsets(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
   std::vector<MotorFeedbackData> full_feedback(ctx.slavecount);
+  int wkc_error_count = 0;
+  static constexpr int kMaxWkcErrors = 5;
 
   // Transition to OPERATIONAL
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
@@ -150,9 +152,16 @@ void ECManager::cyclic_loop() {
     ecx_mbxhandler(&ctx, 0, 4);
 
     if (wkc != expectedWKC) {
-      RCLCPP_ERROR(logger, "Not all nodes responded");
-      shutdown();
-      return;
+      wkc_error_count++;
+      RCLCPP_WARN(logger, "WKC mismatch (%d/%d): got %d, expected %d",
+                  wkc_error_count, kMaxWkcErrors, wkc, expectedWKC);
+      if (wkc_error_count >= kMaxWkcErrors) {
+        RCLCPP_ERROR(logger, "Not all nodes responded");
+        shutdown();
+        return;
+      }
+    } else {
+      wkc_error_count = 0;
     }
 
     // Iterate over connected drives
@@ -412,6 +421,10 @@ bool ECManager::transition_motors_to(CiA402Motor::State state) {
       } else if (m.get_state().value() == CiA402Motor::State::FAULT) {
         RCLCPP_ERROR(logger, "Motor %zu in fault", i + 1);
         return false;
+      } else if (m.get_state().value() == CiA402Motor::State::QUICK_STOP_ACTIVE) {
+        RCLCPP_WARN(logger, "Motor %zu in quick stop, transitioning to SWITCH_ON_DISABLED", i + 1);
+        m.transition_to(CiA402Motor::State::SWITCH_ON_DISABLED);
+        continue_flag = 1;
       } else if (m.get_state().value() != state) {
         m.transition_to(state);
         continue_flag = 1;
