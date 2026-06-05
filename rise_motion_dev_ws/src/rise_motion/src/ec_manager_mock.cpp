@@ -83,6 +83,10 @@ bool MockECManager::set_torque_offset_apsa(const std::vector<int16_t>& /*offsets
   return true;
 }
 
+bool MockECManager::set_motor_torque_apsa(const std::vector<int16_t>& /*torques*/) {
+  return true;
+}
+
 void MockECManager::set_operation_mode(int8_t mode) {
   RCLCPP_INFO(logger_, "Mock: operation mode set to %d", mode);
 }

@@ -25,6 +25,7 @@ private:
   rclcpp::Subscription<rise_motion_messages::msg::MotorPositions>::SharedPtr cmd_sub_;
   rclcpp::Subscription<rise_motion_messages::msg::MotorVelocity>::SharedPtr cmd_vel_sub_;
   rclcpp::Subscription<rise_motion_messages::msg::MotorTorqueOffset>::SharedPtr torque_offset_sub_;
+  rclcpp::Subscription<rise_motion_messages::msg::MotorTorqueOffset>::SharedPtr torque_cmd_sub_;
   rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr feedback_pub_;
   rclcpp::TimerBase::SharedPtr feedback_timer_;
   rclcpp::Publisher<rise_motion_messages::msg::MotorFeedbackFull>::SharedPtr full_feedback_pub_;
@@ -38,6 +39,7 @@ private:
   void commandCallback(const rise_motion_messages::msg::MotorPositions::SharedPtr msg);
   void velocityCommandCallback(rise_motion_messages::msg::MotorVelocity::SharedPtr msg);
   void torqueOffsetCallback(rise_motion_messages::msg::MotorTorqueOffset::SharedPtr msg);
+  void torqueCommandCallback(rise_motion_messages::msg::MotorTorqueOffset::SharedPtr msg);
   void publishFeedback();
   void publishFullFeedback();
   void enableServiceCallback(

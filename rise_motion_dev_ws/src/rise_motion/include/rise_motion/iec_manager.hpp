@@ -19,6 +19,7 @@ public:
 
   virtual bool set_motor_velocity_apsa(const std::vector<int32_t>& velocities) = 0;
   virtual bool set_torque_offset_apsa(const std::vector<int16_t>& offsets) = 0;
+  virtual bool set_motor_torque_apsa(const std::vector<int16_t>& torques) = 0;
   virtual void set_operation_mode(int8_t mode) = 0;
 
   virtual bool sdo_read(uint16_t device_id, uint16_t index,

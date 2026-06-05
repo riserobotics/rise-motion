@@ -105,6 +105,7 @@ void ECManager::cyclic_loop() {
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_velocities(ctx.slavecount, 0);
   std::vector<int16_t> torque_offsets(ctx.slavecount, 0);
+  std::vector<int16_t> motor_torques(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
   std::vector<MotorFeedbackData> full_feedback(ctx.slavecount);
   int wkc_error_count = 0;
@@ -186,12 +187,16 @@ void ECManager::cyclic_loop() {
       cmd_apsa.perf_read(motor_commands);
       vel_cmd_apsa.perf_read(motor_velocities);
       torque_offset_apsa.perf_read(torque_offsets);
+      torque_cmd_apsa.perf_read(motor_torques);
       const int8_t target = target_mode_.load(std::memory_order_relaxed);
       m.outputs->OpMode = target;
       const bool mode_confirmed = (m.inputs->OpModeDisplay == target);
       if (!mode_confirmed) {
         m.outputs->TargetVelocity = 0;
+        m.outputs->TargetTorque   = 0;
         m.outputs->TargetPosition = m.inputs->PositionValue;
+      } else if (target == 10) { // CyclicSyncTorqueMode
+        m.outputs->TargetTorque = motor_torques[i];
       } else if (target == 9) {  // CyclicSyncVelocityMode
         m.outputs->TargetVelocity = motor_velocities[i];
       } else {                   // CyclicSyncPositionMode (default)
@@ -316,6 +321,10 @@ bool ECManager::set_motor_velocity_apsa(const std::vector<int32_t>& velocities) 
 
 bool ECManager::set_torque_offset_apsa(const std::vector<int16_t>& offsets) {
   return torque_offset_apsa.comm_write(offsets);
+}
+
+bool ECManager::set_motor_torque_apsa(const std::vector<int16_t>& torques) {
+  return torque_cmd_apsa.comm_write(torques);
 }
 
 void ECManager::set_operation_mode(int8_t mode) {

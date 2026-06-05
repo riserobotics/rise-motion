@@ -22,6 +22,10 @@ EthercatNode::EthercatNode(IECManager &ec_manager)
       "motor_torque_offset", 10,
       std::bind(&EthercatNode::torqueOffsetCallback, this, _1));
 
+  torque_cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorTorqueOffset>(
+      "motor_commands_torque", 10,
+      std::bind(&EthercatNode::torqueCommandCallback, this, _1));
+
   feedback_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
       "motor_feedback", 10);
 
@@ -169,6 +173,14 @@ void EthercatNode::torqueOffsetCallback(
   }
 }
 
+void EthercatNode::torqueCommandCallback(
+    rise_motion_messages::msg::MotorTorqueOffset::SharedPtr msg) {
+  std::vector<int16_t> torques(msg->torque_offsets.begin(), msg->torque_offsets.end());
+  if (!ec_manager_.set_motor_torque_apsa(torques)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue torque commands");
+  }
+}
+
 void EthercatNode::setOperationModeCallback(
     std::shared_ptr<rise_motion_messages::srv::SetOperationModeSrv::Request> request,
     std::shared_ptr<rise_motion_messages::srv::SetOperationModeSrv::Response> response) {
@@ -177,15 +189,17 @@ void EthercatNode::setOperationModeCallback(
     response->message = "EtherCAT not enabled";
     return;
   }
-  if (request->mode != 8 && request->mode != 9) {
+  if (request->mode != 8 && request->mode != 9 && request->mode != 10) {
     response->success = false;
-    response->message = "Invalid mode " + std::to_string(request->mode) + ". Only mode 8 (CyclicSyncPosition) and 9 (CyclicSyncVelocity) are supported.";
+    response->message = "Invalid mode " + std::to_string(request->mode) + ". Supported: 8 (Position), 9 (Velocity), 10 (Torque).";
     RCLCPP_WARN(get_logger(), "Rejected unsupported operation mode %d", request->mode);
     return;
   }
   ec_manager_.set_operation_mode(request->mode);
   response->success = true;
-  response->message = request->mode == 9 ? "Velocity mode active (mode 9)" : "Position mode active (mode 8)";
+  if (request->mode == 10)      response->message = "Torque mode active (mode 10)";
+  else if (request->mode == 9)  response->message = "Velocity mode active (mode 9)";
+  else                          response->message = "Position mode active (mode 8)";
   RCLCPP_INFO(get_logger(), "Operation mode set to %d", request->mode);
 }
 

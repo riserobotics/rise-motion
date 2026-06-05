@@ -28,6 +28,7 @@ public:
   bool get_full_feedback_apsa(std::vector<MotorFeedbackData>& feedback) override;
   bool set_motor_velocity_apsa(const std::vector<int32_t>& velocities) override;
   bool set_torque_offset_apsa(const std::vector<int16_t>& offsets) override;
+  bool set_motor_torque_apsa(const std::vector<int16_t>& torques) override;
   void set_operation_mode(int8_t mode) override;
 
   // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
@@ -62,13 +63,16 @@ private:
   // torque_offset_apsa: ROS → EtherCAT (0x60B2 torque offset, ‰ rated torque)
   APSA<std::vector<int16_t>> torque_offset_apsa;
 
+  // torque_cmd_apsa: ROS → EtherCAT (TargetTorque, Mode 10, ‰ rated torque)
+  APSA<std::vector<int16_t>> torque_cmd_apsa;
+
   // feedback_apsa: EtherCAT → ROS (motor positions only, für /motor_feedback)
   APSA<std::vector<int32_t>> feedback_apsa;
 
   // full_feedback_apsa: EtherCAT → ROS (alle PDO-Felder, für /motor_feedback_full)
   APSA<std::vector<MotorFeedbackData>> full_feedback_apsa;
 
-  // target_mode: 8 = CyclicSyncPositionMode (default), 9 = CyclicSyncVelocityMode
+  // target_mode: 8 = CyclicSyncPositionMode (default), 9 = CyclicSyncVelocityMode, 10 = CyclicSyncTorqueMode
   // Atomic: written by ROS thread (set_operation_mode), read by EtherCAT thread (cyclic_loop)
   std::atomic<int8_t> target_mode_{8};
 };
