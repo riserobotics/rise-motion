@@ -12,11 +12,8 @@
 #include <rise_motion/cia402.hpp>
 #include <rise_motion/ec_manager.hpp>
 #include <soem/soem.h>
+#include <rise_motion/config.hpp>
 
-// expected config, needs to be retrieved from config node
-struct {
-  int slavecount = 1;
-} config;
 
 ECManager::ECManager(const std::string interface, int cycle_time)
     : interface(interface), logger(rclcpp::get_logger("ECManager")),
@@ -51,9 +48,9 @@ int ECManager::init_ec() {
   }
 
   // TODO: More extensive verification of network
-  if (ctx.slavecount != config.slavecount) {
+  if (ctx.slavecount != rise_motion::config::num_motors) {
     RCLCPP_ERROR(logger, "Expected %d devices, but discovered %d",
-                 config.slavecount, ctx.slavecount);
+                 rise_motion::config::num_motors, ctx.slavecount);
     return EXIT_FAILURE;
   }
 
