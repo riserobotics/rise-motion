@@ -1,8 +1,8 @@
 #pragma once
 
-// if used as part of rise-os-core set the environment variable MOTION_USE EXTERNAL_CONFIG=1 to use the config package
+// if used as part of rise-os-core set the environment variable MOTION_USE_EXTERNAL_CONFIG=1 to use the config package
 
-#if EXTERNAL_CONFIG_AVAILBLE
+#if EXTERNAL_CONFIG_AVAILABLE
 
 #include <config/rise_configurations.hpp>
 
