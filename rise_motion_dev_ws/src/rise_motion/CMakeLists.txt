@@ -9,7 +9,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rise_motion_messages REQUIRED)
-find_package(config QUIET)
 
 include_directories(include)
 
@@ -32,8 +31,10 @@ target_link_libraries(
 	soem
 )
 
-if(config_FOUND)
-  message(NOTE "external config package found: using values from config package")
+if(DEFINED ENV{MOTION_USE_EXTERNAL_CONFIG} AND "$ENV{MOTION_USE_EXTERNAL_CONFIG}" STREQUAL "1")
+  message(NOTE "using values from external config package")
+
+  find_package(config REQUIRED)
 
   target_link_libraries(
     rise_motion_main
@@ -45,7 +46,7 @@ if(config_FOUND)
     PRIVATE EXTERNAL_CONFIG_AVAILABLE=1
   )
 else()
-  message(WARNING "no external config package found: using values from local rise_motion/config.hpp")
+  message(WARNING "no external config package defined: using values from local rise_motion/config.hpp")
 
   target_compile_definitions(
     rise_motion_main

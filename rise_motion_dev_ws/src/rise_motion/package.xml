@@ -11,7 +11,7 @@
 
   <depend>rclcpp</depend>
   <depend>rise_motion_messages</depend>
-  <depend condition="MOTION_USE_EXTERNAL_CONFIG == 1">config</depend>
+  <depend condition="$MOTION_USE_EXTERNAL_CONFIG == 1">config</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
