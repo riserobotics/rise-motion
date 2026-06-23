@@ -1,3 +1,7 @@
+#pragma once
+
+#include <utility>
+
 namespace rise
 {
     template <typename T, typename E> struct Result
