@@ -101,18 +101,12 @@ class SdoScheduler
         static RetryOptions get_default_retry_options();
 
         Submission enqueue_read(
-            std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::size_t read_size);
-
-        Submission enqueue_read(
             std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::size_t read_size, 
-            RetryOptions retry_options);
-
-        Submission enqueue_write(
-            std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::vector<std::uint8_t> value);
+            SdoScheduler::RetryOptions retry_options = SdoScheduler::get_default_retry_options());
 
         Submission enqueue_write(
             std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::vector<std::uint8_t> value, 
-            RetryOptions retry_options);
+            SdoScheduler::RetryOptions retry_options = SdoScheduler::get_default_retry_options());
 
         
         std::optional<ActiveJob> get_job();

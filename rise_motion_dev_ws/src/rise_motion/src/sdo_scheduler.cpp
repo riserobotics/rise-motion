@@ -20,12 +20,6 @@ SdoScheduler::RetryOptions SdoScheduler::get_default_retry_options()
 }
 
 SdoScheduler::Submission SdoScheduler::enqueue_read(
-    std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::size_t read_size) 
-{
-    return enqueue_read(device_id, index, subindex, read_size, get_default_retry_options());
-}
-
-SdoScheduler::Submission SdoScheduler::enqueue_read(
     std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::size_t read_size, 
     RetryOptions retry_options) 
 {
@@ -37,12 +31,6 @@ SdoScheduler::Submission SdoScheduler::enqueue_read(
     request.read_size = read_size;
 
     return submit(std::move(request), retry_options);
-}
-
-SdoScheduler::Submission SdoScheduler::enqueue_write(
-    std::uint16_t device_id, std::uint16_t index, std::uint8_t subindex, std::vector<std::uint8_t> value) 
-{
-    return enqueue_write(device_id, index, subindex, std::move(value), get_default_retry_options());
 }
 
 SdoScheduler::Submission SdoScheduler::enqueue_write(
