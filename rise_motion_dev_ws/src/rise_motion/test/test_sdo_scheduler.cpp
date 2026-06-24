@@ -121,3 +121,25 @@ TEST(SdoSchedulerTest, RETRYABLE_FAILURE)
 
     EXPECT_EQ(scheduler.num_jobs_pending(), 0);
 }
+
+
+TEST(SdoSchedulerTest, FULL_QUEUE)
+{
+    SdoScheduler scheduler{1};
+
+    auto first_submission = scheduler.enqueue_read(1, 0x6064, 0x00, 1);
+
+    ASSERT_NE(first_submission.id, SdoScheduler::INVALID_JOB_ID);
+
+    auto second_submission = scheduler.enqueue_read(1, 0x6064, 0x00, 1);
+
+    EXPECT_EQ(second_submission.id, SdoScheduler::INVALID_JOB_ID);
+
+    ASSERT_EQ(second_submission.future.wait_for(std::chrono::milliseconds{1}), std::future_status::ready);
+
+    const auto result = second_submission.future.get();
+
+    EXPECT_FALSE(result);
+    EXPECT_EQ(result.error.code, SdoScheduler::ErrorCode::QUEUE_FULL);
+    EXPECT_EQ(scheduler.num_jobs_pending(), 1);
+}
