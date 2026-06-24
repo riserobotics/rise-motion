@@ -79,3 +79,47 @@ TEST(SdoSchedulerTest, SUCCESSFUL_WRITE)
 
     EXPECT_EQ(scheduler.num_jobs_pending(), 0);
 }
+
+
+TEST(SdoSchedulerTest, RETRYABLE_FAILURE)
+{
+    SdoScheduler scheduler;
+
+    auto retry_options = SdoScheduler::get_default_retry_options();
+    retry_options.max_attempts = 2;
+
+    auto submission = scheduler.enqueue_read(1, 0x6064, 0x00, 1, retry_options);
+
+    ASSERT_NE(submission.id, SdoScheduler::INVALID_JOB_ID);
+    EXPECT_EQ(scheduler.num_jobs_pending(), 1);
+
+    auto first_job = scheduler.get_job();
+
+    ASSERT_TRUE(first_job.has_value());
+    EXPECT_EQ(first_job->attempts, 1);
+
+    auto first_reply = SdoScheduler::AttemptResult{SdoScheduler::AttemptStatus::RETRYABLE_FAILURE};
+    bool first_completed = scheduler.complete_attempt(first_job->id, first_reply);
+
+    ASSERT_TRUE(first_completed);
+    EXPECT_EQ(scheduler.pending_count(), 1);
+
+    auto second_job = scheduler.get_job();
+
+    ASSERT_TRUE(second_job.has_value());
+    EXPECT_EQ(second_job->id, submission.id);
+    EXPECT_EQ(second_job->attempts, 2);
+
+    auto second_reply = SdoScheduler::AttemptResult{SdoScheduler::AttemptStatus::SUCCESS, {0x11}};
+    bool second_completed = scheduler.complete_attempt(first_job->id, second_reply);
+
+    ASSERT_TRUE(second_completed);
+    ASSERT_EQ(submission.future.wait_for(std::chrono::milliseconds{1}), std::future_status::ready);
+
+    const auto result = submission.future.get();
+
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result.value, std::vector<std::uint8_t>{0x11});
+
+    EXPECT_EQ(scheduler.num_jobs_pending(), 0);
+}
