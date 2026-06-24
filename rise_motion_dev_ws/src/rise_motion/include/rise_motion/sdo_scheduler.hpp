@@ -94,6 +94,9 @@ class SdoScheduler
         explicit SdoScheduler(std::size_t max_queue_size = 64);
         ~SdoScheduler();
 
+        SdoScheduler(const SdoScheduler &) = delete;
+        SdoScheduler &operator=(const SdoScheduler &) = delete;
+
 
         static RetryOptions get_default_retry_options();
 
