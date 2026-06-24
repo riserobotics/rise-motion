@@ -14,7 +14,13 @@ include_directories(include)
 
 add_subdirectory(SOEM)
 
-# --- sdo_serializer library ---
+# --- SDO scheduler library ---
+add_library(sdo_scheduler_lib STATIC src/sdo_scheduler.cpp)
+target_include_directories(sdo_scheduler_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+# --- SDO serializer library ---
 add_library(sdo_serializer_lib INTERFACE)
 target_include_directories(sdo_serializer_lib INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -36,6 +42,7 @@ ament_target_dependencies(
 target_link_libraries(
 	rise_motion_main
 	soem
+  sdo_scheduler_lib
 )
 
 #target_link_options(rise_motion_main PRIVATE -Wl,-rpath,/hello/home/rise/Projects/rise-motion/rise_motion_dev_ws/install/rise_motion_messages/lib)
@@ -69,10 +76,14 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 
-  # --- sdo_serializer test ---
-  ament_add_gtest(test_sdo_serializer
-    test/test_sdo_serializer.cpp
-  )
+  # --- SDO scheduler test ---
+  ament_add_gtest(test_sdo_scheduler test/test_sdo_scheduler.cpp)
+  if(TARGET test_sdo_scheduler)
+    target_link_libraries(test_sdo_scheduler sdo_scheduler_lib)
+  endif()
+
+  # --- SDO serializer test ---
+  ament_add_gtest(test_sdo_serializer test/test_sdo_serializer.cpp)
   if(TARGET test_sdo_serializer)
     target_link_libraries(test_sdo_serializer sdo_serializer_lib)
   endif()
