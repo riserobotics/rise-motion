@@ -222,6 +222,8 @@ void ECManager::cyclic_loop() {
     // Make feedback available to ROS publisher (wait-free)
     feedback_apsa.perf_write(motor_feedback);
 
+    process_sdo_request();
+
     // Sleep until next cycle (maintains 1kHz frequency)
     std::this_thread::sleep_until(next);
   }
@@ -230,8 +232,57 @@ void ECManager::cyclic_loop() {
   return;
 }
 
+void ECManager::process_sdo_request()
+{
+  constexpr auto MINIMUM_SDO_TIMEOUT = std::chrono::microseconds{200};
+
+  const auto now = std::chrono::steady_clock::now();
+
+  if (now >= next){
+    return;
+  }
+
+  const auto time_left = std::chrono::duration_cast<std::chrono::microseconds>(next - now);
+
+  if (time_left <= MINIMUM_SDO_TIMEOUT){
+    return;
+  }
+
+  auto job = sdo_scheduler_.get_job();
+
+  if (!job.has_value()) {
+    return;
+  }
+
+  const int timeout_us = static_cast<int>((time_left).count());
+
+  SdoScheduler::AttemptResult attempt_result;
+
+  if (job->request.operation == SdoScheduler::Operation::READ) {
+    std::vector<uint8> value;
+
+    const bool success = sdo_read(
+      job->request.device_id, job->request.index, job->request.subindex, value, job->request.read_size, timeout_us);
+
+    attempt_result = {
+      success ? SdoScheduler::AttemptStatus::SUCCESS : SdoScheduler::AttemptStatus::RETRYABLE_FAILURE, std::move(value)};
+
+  } 
+  else {
+    const bool success = sdo_write(
+      job->request.device_id, job->request.index, job->request.subindex, job->request.write_value, timeout_us);
+
+    attempt_result = {success ? SdoScheduler::AttemptStatus::SUCCESS : SdoScheduler::AttemptStatus::RETRYABLE_FAILURE, {}};
+  }
+
+  sdo_scheduler_.complete_attempt(job->id, std::move(attempt_result));
+}
+
 void ECManager::shutdown() {
   RCLCPP_INFO(logger, "Shutting down");
+
+  sdo_scheduler_.cancel_all();
+
   if (!transition_motors_to(CiA402Motor::State::SWITCH_ON_DISABLED)) {
     RCLCPP_ERROR(logger,
                  "Couldn't transition all motors to SWITCH_ON_DISABLED");
@@ -308,32 +359,56 @@ uint16 ECManager::transition_ec(uint16 state) {
   return reached_state;
 }
 
+bool ECManager::cancel_sdo_request(SdoScheduler::JobID id)
+{
+  return sdo_scheduler_.cancel(id);
+}
+
+SdoScheduler::Submission ECManager::enqueue_sdo_read(
+  uint16 device_id, uint16 index, uint8 subindex, uint8 value_size, SdoScheduler::RetryOptions retry_options)
+{
+  return sdo_scheduler_.enqueue_read(device_id, index, subindex, value_size, retry_options);
+}
+
+SdoScheduler::Submission ECManager::enqueue_sdo_write(
+  uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8> value, SdoScheduler::RetryOptions retry_options)
+{
+  return sdo_scheduler_.enqueue_write(device_id, index, subindex, value, retry_options);
+}
+
 bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
-                         std::vector<uint8> &value, uint8 value_size) {
+                         std::vector<uint8> &value, uint16 value_size, int timeout_us) 
+{
+  value.resize(value_size);
   int psize = value_size;
-  uint8 *buf = new uint8[psize];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize,
-                        (void *)buf, EC_TIMEOUTRXM);
+                        value.data(), timeout_us);
 
-  value.clear();
-  for (int i = 0; i < psize; i++) {
-    value.push_back(buf[i]);
+  if (wkc <= 0) {
+    value.clear();
+    return false;
   }
+
   RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
   //  return (wkc == expectedWKC);
   return true;
 }
 
 bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
-                          std::vector<uint8> &value) {
+                          std::vector<uint8> &value, int timeout_us) 
+{
   int psize = value.size();
-  uint8 *buf = &value[0];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
-                         (void *)buf, EC_TIMEOUTRXM);
+                         value.data(), timeout_us);
+
+  if (wkc <= 0) {
+    return false;
+  }
+
   RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
   //  return (wkc == expectedWKC);
   return true;

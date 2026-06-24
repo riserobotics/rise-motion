@@ -7,6 +7,8 @@
 #include <rise_motion_messages/srv/sdo_read_srv.hpp>
 #include <rise_motion_messages/srv/sdo_write_srv.hpp>
 #include <thread>
+#include <chrono>
+#include <future>
 
 class EthercatNode : public rclcpp::Node {
 public:
@@ -17,6 +19,7 @@ private:
   ECManager& ec_manager_;
   std::unique_ptr<std::thread> ec_thread_;
   bool ethercat_enabled_{false};
+  static constexpr std::chrono::seconds SDO_SERVICE_TIMEOUT{1};
 
   rclcpp::Subscription<rise_motion_messages::msg::MotorPositions>::SharedPtr cmd_sub_;
   rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr feedback_pub_;

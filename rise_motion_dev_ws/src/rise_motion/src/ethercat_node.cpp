@@ -116,23 +116,40 @@ void EthercatNode::sdoReadServiceCallback(
     return;
   }
 
-  std::vector<uint8> value;
-  bool success = ec_manager_.sdo_read(request->device_id, request->index,
-				      request->subindex, value, request->value_size);
+  auto submission = ec_manager_.enqueue_sdo_read(request->device_id, request->index, request->subindex, request->value_size);
 
-    if (!success) {
-    RCLCPP_WARN(get_logger(), "Read failed");
+  if (submission.id == SdoScheduler::INVALID_JOB_ID) {
+    RCLCPP_WARN(get_logger(), "ethercat_node: Could not queue SDO read request");
+    response->status_code = 0;
+    return;
+  }
+
+  if (submission.future.wait_for(SDO_SERVICE_TIMEOUT) != std::future_status::ready) {
+    RCLCPP_WARN(get_logger(), "SDO read request timed out");
+
+    ec_manager_.cancel_sdo_request(submission.id);
+
+    response->status_code = 0;
+    return;
+  }
+
+  auto result = submission.future.get();
+
+  if (!result) {
+    RCLCPP_WARN(get_logger(), "SDO read failed: %s", result.error.message);
+
     response->status_code = 0;
     return;
   }
 
   response->status_code = 1;
-  response->device_id	= request->device_id;
-  response->index	= request->index;
-  response->subindex	= request->subindex;
-  response->value	= value;
+  response->device_id = request->device_id;
+  response->index = request->index;
+  response->subindex = request->subindex;
+  response->value = result.value;
   response->value_type = request->value_type;
 }
+
 void EthercatNode::sdoWriteServiceCallback(
     const std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Request>
 	request,
@@ -143,18 +160,36 @@ void EthercatNode::sdoWriteServiceCallback(
     return;
   }
   RCLCPP_INFO(get_logger(), "Got sdo_write request");
-  bool success = ec_manager_.sdo_write(request->device_id, request->index,
-				       request->subindex, request->value);
-  RCLCPP_INFO(get_logger(), "%d", success);
-  if (!success) {
-    RCLCPP_INFO(get_logger(), "Write failed");
+
+  auto submission = ec_manager_.enqueue_sdo_write(request->device_id, request->index, request->subindex, request->value);
+
+  if (submission.id == SdoScheduler::INVALID_JOB_ID) {
+    RCLCPP_WARN(get_logger(), "Could not queue SDO write request");
+    response->status_code = 0;
+    return;
+  }
+
+  if (submission.future.wait_for(SDO_SERVICE_TIMEOUT) != std::future_status::ready) {
+    RCLCPP_WARN(get_logger(), "SDO write request timed out");
+
+    ec_manager_.cancel_sdo_request(submission.id);
+
+    response->status_code = 0;
+    return;
+  }
+
+  auto result = submission.future.get();
+
+  if (!result) {
+    RCLCPP_WARN(get_logger(), "SDO write failed: %s", result.error.message);
+
     response->status_code = 0;
     return;
   }
 
   response->status_code = 1;
-  response->device_id	= request->device_id;
-  response->index	= request->index;
-  response->subindex	= request->subindex;
+  response->device_id = request->device_id;
+  response->index = request->index;
+  response->subindex = request->subindex;
   response->value_type = request->value_type;
 }

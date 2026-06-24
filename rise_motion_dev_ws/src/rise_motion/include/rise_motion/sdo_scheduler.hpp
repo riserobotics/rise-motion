@@ -66,7 +66,7 @@ class SdoScheduler
             std::uint8_t subindex{0};
 
             // Used only for READ jobs
-            std::size_t read_size{0};
+            std::uint16_t read_size{0};
 
             // Used only for WRITE jobs
             std::vector<std::uint8_t> write_value{};
