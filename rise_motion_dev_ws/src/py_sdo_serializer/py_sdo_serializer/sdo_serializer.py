@@ -1,12 +1,27 @@
-from dataclasses import dataclass
+"""Functions to serialize/deserialize a value according to EtherCAT data type.
+
+The data type can be identified by its index, name, or base data type
+string. Providing one is sufficient.
+
+For definitions of supported base data types and encoding see see ETG.1000.6
+and ETG.1020 at https://www.ethercat.org/en/downloads.html.
+"""
 import struct
+from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 # Record type
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class TypeInfo:
+    """Stores attributes of EtherCAT base data types from ETG.1020.
+
+    For definitions of supported base data types and encoding
+    see see ETG.1000.6, ETG.1020 at https://www.ethercat.org/en/downloads.html.
+    """
+
     index: int            # EtherCAT object-dictionary type index
     name: str             # ETG long name  (e.g. 'INTEGER16')
     base_data_type: str   # IEC / short name  (e.g. 'INT')
@@ -22,14 +37,14 @@ class TypeInfo:
 BASE_DATA_TYPES: dict[int, TypeInfo] = {
 
     # Boolean / generic word types
-    0x0001: TypeInfo(0x0001, 'BOOLEAN',        'BOOL',   1,   'serialize_bool',    'deserialize_bool'),
-    0x001E: TypeInfo(0x001E, 'BYTE',           'BYTE',   8,   'serialize_bitn',   'deserialize_bitn'),
+    0x0001: TypeInfo(0x0001, 'BOOLEAN',        'BOOL',   1,   'serialize_bool',  'deserialize_bool'),
+    0x001E: TypeInfo(0x001E, 'BYTE',           'BYTE',   8,   'serialize_bitn',  'deserialize_bitn'),
     0x001F: TypeInfo(0x001F, 'WORD',           'WORD',   16,  'serialize_bitn',  'deserialize_bitn'),
     0x0020: TypeInfo(0x0020, 'DWORD',          'DWORD',  32,  'serialize_bitn',  'deserialize_bitn'),
 
     # Time types (48-bit, special structure)
-    0x000C: TypeInfo(0x000C, 'TIME_OF_DAY',    'TIME_OF_DAY',    48, 'serialize_time_of_day',  'deserialize_time48'),
-    0x000D: TypeInfo(0x000D, 'TIME_DIFFERENCE','TIME_DIFFERENCE', 48, 'serialize_time_difference',  'deserialize_time48'),
+    0x000C: TypeInfo(0x000C, 'TIME_OF_DAY',     'TIME_OF_DAY',    48, 'serialize_time_of_day',  'deserialize_time48'),
+    0x000D: TypeInfo(0x000D, 'TIME_DIFFERENCE', 'TIME_DIFFERENCE', 48, 'serialize_time_difference',  'deserialize_time48'),
 
     # Bit strings BIT1 - BIT16
     0x0030: TypeInfo(0x0030, 'BIT1',  'BIT1',   1,  'serialize_bitn', 'deserialize_bitn'),
@@ -83,9 +98,9 @@ BASE_DATA_TYPES: dict[int, TypeInfo] = {
 
     # - Base Data Types with variable length -
     # Strings
-    0x0009: TypeInfo(0x0009, 'VISIBLE_STRING', 'STRING(n)',  8,  'serialize_visible_string', 'deserialize_visible_string'),#8*(n)),
-    0x0268: TypeInfo(0x0268, 'UNICODE_STRING', 'WSTRING(n)', 16, 'serialize_unicode_string', 'deserialize_unicode_string'),#16*(n)
-    
+    0x0009: TypeInfo(0x0009, 'VISIBLE_STRING', 'STRING(n)',  8,  'serialize_visible_string', 'deserialize_visible_string'),  # 8*(n)),
+    0x0268: TypeInfo(0x0268, 'UNICODE_STRING', 'WSTRING(n)', 16, 'serialize_unicode_string', 'deserialize_unicode_string'),  # 16*(n)
+
     # Octet field
     0x000A: TypeInfo(0x000A, 'OCTET_STRING',      'ARRAY [0..n] OF BYTE',     8,  'serialize_bitn',  'deserialize_bitn'),#8*(n+1)
     0x000B: TypeInfo(0x000B, 'ARRAY_OF_UINT',     'ARRAY [0..n] OF UINT',     16, 'serialize_uint',  'deserialize_uint'),#16*(n+1)
@@ -138,19 +153,25 @@ def get_type_info(
         try:
             return BASE_DATA_TYPES[index]
         except KeyError:
-            raise KeyError(f"No EtherCAT type with index {index:#04x}") from None
+            raise KeyError(
+                f"No EtherCAT type with index {index:#04x}"
+                ) from None
 
     if name is not None:
         try:
             return BY_NAME[name]
         except KeyError:
-            raise KeyError(f"No EtherCAT type with name '{name}'") from None
+            raise KeyError(
+                f"No EtherCAT type with name '{name}'"
+                ) from None
 
     if base_data_type is not None:
         try:
             return BY_BASE_DATA_TYPE[base_data_type]
         except KeyError:
-            raise KeyError(f"No EtherCAT type with base_data_type '{base_data_type}'") from None
+            raise KeyError(
+                f"No EtherCAT type with base_data_type '{base_data_type}'"
+                ) from None
 
     raise ValueError('Provide at least one of: index, name, base_data_type')
 
@@ -171,8 +192,8 @@ def serialize(
     The data type can be identified by its index, name, or base data type
     string. Providing one is sufficient.
 
-    For definitions of supported base data types and encoding see see ETG.1000.6 and ETG.1020 at 
-    https://www.ethercat.org/en/downloads.html
+    For definitions of supported base data types and encoding
+    see see ETG.1000.6 and ETG.1020 at https://www.ethercat.org/en/downloads.html
 
     :param value:
         Value to serialize.
@@ -181,24 +202,26 @@ def serialize(
     :param name:
         EtherCAT data type name.
     :param base_data_type:
-        Data type making up this base data type. Called 'Type' in Somanet Circulo Object Dictionary reference.
+        Data type making up this base data type. Called 'Type' in
+        Somanet Circulo Object Dictionary reference.
     :returns:
         Serialized value as a list of bytes.
     :rtype:
         list[int]
     """
-
     try:
         object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-        
+
         # serialize a base data type
         if object_info.base_data_type[0:5] != 'ARRAY':
-            return globals()[object_info.serialize_fn](value, object_info.bit_size)
+            return globals()[object_info.serialize_fn](
+                value, object_info.bit_size)
         # serialize a base data type list (imagine this: base_data_type[])
         else:  
             out = []
             for item in value:
-                out.extend(globals()[object_info.serialize_fn](item, object_info.bit_size))
+                out.extend(globals()[object_info.serialize_fn](
+                    item, object_info.bit_size))
             return out
     except:
         return -1
@@ -215,8 +238,8 @@ def deserialize(
     The data type can be identified by its index, name, or base data type
     string. Providing one is sufficient.
 
-    For definitions of supported base data types and encoding see see ETG.1000.6 and ETG.1020 at 
-    https://www.ethercat.org/en/downloads.html
+    For definitions of supported base data types and encoding
+    see ETG.1000.6 and ETG.1020 at https://www.ethercat.org/en/downloads.html
 
     :param serialized_value:
         Bytes to deserialize.
@@ -225,7 +248,8 @@ def deserialize(
     :param name:
         EtherCAT data type name.
     :param base_data_type:
-        Data type making up this base data type. Called 'Type' in Somanet Circulo Object Dictionary reference.
+        Data type making up this base data type. Called 'Type' in
+        Somanet Circulo Object Dictionary reference.
     :returns:
         Deserialized value as a fitting python data type.
     """
@@ -264,10 +288,9 @@ def deserialize(
 # Specific functions (called by generic functions)
 # ---------------------------------------------------------------------------
 
+
 def serialize_bitn(val, bit_s: int) -> list[int]:
-    """
-    Serialize a bit-string into a list[int].
-    """
+    """Serialize a bit-string into a list[int]."""
     if isinstance(val, str):
         val = int(val, 2)
     elif not isinstance(val, int):
@@ -276,47 +299,41 @@ def serialize_bitn(val, bit_s: int) -> list[int]:
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder='little'))
 
+
 def deserialize_bitn(ser_val: list[int], bit_s: int) -> str:
-    """
-    Deserialize a list[int] into a bit-string.
-    """
+    """Deserialize a list[int] into a bit-string."""
     value = int.from_bytes(bytes(ser_val), byteorder='little')
     return bin(value)[2:].zfill(bit_s)
 
+
 def serialize_int(val: int, bit_s: int) -> list[int]:
-    """
-    Serialize a signed int into a list[int].
-    """
+    """Serialize a signed int into a list[int]."""
     if not isinstance(val, int): 
         raise TypeError(f"Input value must be an int, not {type(val)} {val}.")
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder='little', signed=True))
 
+
 def deserialize_int(ser_val: list[int], bit_s: int) -> int:
-    """
-    Deserialize a list[int] into a signed int.
-    """
+    """Deserialize a list[int] into a signed int."""
     return int.from_bytes(bytes(ser_val), byteorder='little', signed=True)
 
+
 def serialize_uint(val: int, bit_s: int) -> list[int]:
-    """
-    Serialize an unsigned int into a list[int].
-    """
+    """Serialize an unsigned int into a list[int]."""
     if not isinstance(val, int): 
         raise TypeError(f"Input value must be an int, not {type(val)} {val}.")
     byte_len = (bit_s + 7) // 8
     return list(val.to_bytes(byte_len, byteorder='little'))
 
+
 def deserialize_uint(ser_val: list[int], bit_s: int) -> int:
-    """
-    Deserialize a list[int] into an unsigned int.
-    """
+    """Deserialize a list[int] into an unsigned int."""
     return int.from_bytes(bytes(ser_val), byteorder='little')
 
+
 def serialize_bool(val, bit_s: int) -> list[int]:
-    """
-    Serialize a bool into a list[int].
-    """
+    """Serialize a bool into a list[int]."""
     if (not isinstance(val, bool)) and (val not in [1, 0]): 
         raise TypeError(f"Input value must be a bool or the int 1 or 0, not {type(val)} {val}.")
     if val:
@@ -324,74 +341,64 @@ def serialize_bool(val, bit_s: int) -> list[int]:
     else:
         return serialize_bitn(0x00, bit_s)
 
+
 def deserialize_bool(ser_val: list[int], bit_s: int) -> bool:
-    """
-    Deserialize a list[int] into a bool.
-    """
+    """Deserialize a list[int] into a bool."""
     return 0 != ser_val[0]
 
+
 def serialize_float(val, bit_s: int) -> list[int]:
-    """
-    Serialize a float into a list[int].
-    """
+    """Serialize a float into a list[int]."""
     if not isinstance(val, float): 
         raise TypeError(f"Input value must be a float, not {type(val)} {val}.")
     return list(struct.pack(f"<{'f' if bit_s == 32 else 'd'}", val))
 
+
 def deserialize_float(ser_val: list[int], bit_s: int) -> float:
-    """
-    Deserialize a list[int] into a float.
-    """
+    """Deserialize a list[int] into a float."""
     return struct.unpack(f"<{'f' if bit_s == 32 else 'd'}", bytes(ser_val))[0]
 
+
 def serialize_time_of_day(val, bit_s: int) -> list[int]:
-    """
-    Takes a tuple of ints containing ms since midnight and days since 01.01.1984
-    """
+    """Serialize tuple of ints (ms since midnight, days since 01.01.1984)."""
     if (len(val) !=  2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
         raise TypeError(f"There needs to be a ms and a day value. They must be ints in a tuple, not {type(val)} {val}")
     if val[0] > (1<<28)-1:
         raise OverflowError('the 4 most significant bits of number of ms since midnight need to be 0')
     return list(val[0].to_bytes(4, byteorder='big')) + list(val[1].to_bytes(2, byteorder='big'))
 
+
 def serialize_time_difference(val, bit_s: int) -> list[int]:
-    """
-    Takes a tuple of ints containing ms and days
-    """
+    """Serialize tuple of ints (ms, days)."""
     if (len(val) != 2) or (not isinstance(val[0], int)) or (not isinstance(val[1], int)): 
         raise TypeError(f"There needs to be a ms and a day value. They must be ints in a tuple, not {type(val)} {val}")
     return list(val[0].to_bytes(4, byteorder='big')) + list(val[1].to_bytes(2, byteorder='big'))
 
+
 def deserialize_time48(ser_val: list[int], bit_s: int) -> tuple[int]:
-    """
-    Takes list[int] and returns a tuple containing ms and days
-    """
+    """Deserialize list[int] to tuple of ints (ms, days)."""
     return (int.from_bytes(ser_val[:4], byteorder='big'), int.from_bytes(ser_val[4:], byteorder='big'))
 
+
 def serialize_visible_string(val: str, bit_s: int) -> list[int]:
-    """
-    Serialize an UTF-8 encoded string into a list[int].
-    """
+    """Serialize an UTF-8 encoded string into a list[int]."""
     if not isinstance(val, str): 
         raise TypeError(f"Input value must be str, not {type(val)} {val}")
     return list(val.encode('UTF-8'))
 
+
 def deserialize_visible_string(ser_val: list[int], bit_s: int) -> str:
-    """
-    Deerialize a list[int] into an UTF-8 encoded string.
-    """
+    """Deserialize a list[int] into an UTF-8 encoded string."""
     return bytes(ser_val).decode('UTF-8')
 
+
 def serialize_unicode_string(val: str, bit_s: int) -> list[int]:
-    """
-    Serialize a utf_16_le encoded string into a list[int].
-    """
+    """Serialize a utf_16_le encoded string into a list[int]."""
     if not isinstance(val, str): 
         raise TypeError(f"Input value must be str, not {type(val)} {val}")
     return list(val.encode('utf_16_le'))
 
+
 def deserialize_unicode_string(ser_val: list[int], bit_s: int) -> str:
-    """
-    Deerialize a list[int] into a utf_16_le encoded string.
-    """
+    """Deerialize a list[int] into a utf_16_le encoded string."""
     return bytes(ser_val).decode('utf_16_le')
