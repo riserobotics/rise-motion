@@ -139,7 +139,88 @@ TEST(SdoSchedulerTest, FULL_QUEUE)
 
     const auto result = second_submission.future.get();
 
-    EXPECT_FALSE(result);
+    ASSERT_FALSE(result);
     EXPECT_EQ(result.error.code, SdoScheduler::ErrorCode::QUEUE_FULL);
     EXPECT_EQ(scheduler.num_jobs_pending(), 1);
+}
+
+
+TEST(SdoSchedulerTest, CANCEL_JOB)
+{
+    SdoScheduler scheduler;
+
+    auto submission = scheduler.enqueue_read(1, 0x6064, 0x00, 1);
+
+    ASSERT_NE(submission.id, SdoScheduler::INVALID_JOB_ID);
+    EXPECT_EQ(scheduler.num_jobs_pending(), 1);
+
+    ASSERT_TRUE(scheduler.cancel(submission.id));
+
+    ASSERT_EQ(submission.future.wait_for(std::chrono::milliseconds{1}), std::future_status::ready);
+
+    const auto result = submission.future.get();
+
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error.code, SdoScheduler::ErrorCode::CANCELLED);
+    EXPECT_EQ(scheduler.num_jobs_pending(), 0);
+}
+
+
+TEST(SdoSchedulerTest, CANCEL_ACTIVE_JOB)
+{
+    SdoScheduler scheduler;
+
+    auto submission = scheduler.enqueue_read(1, 0x6064, 0x00, 1);
+
+    ASSERT_NE(submission.id, SdoScheduler::INVALID_JOB_ID);
+    EXPECT_EQ(scheduler.num_jobs_pending(), 1);
+
+    auto job = scheduler.get_job();
+
+    ASSERT_TRUE(job.has_value());
+
+    ASSERT_TRUE(scheduler.cancel(submission.id));
+
+    std::vector<std::uint8_t> reply = {0x11};
+
+    bool completed = scheduler.complete_attempt(job->id, SdoScheduler::AttemptResult{SdoScheduler::AttemptStatus::SUCCESS, reply});
+
+    ASSERT_TRUE(completed);
+
+    ASSERT_EQ(submission.future.wait_for(std::chrono::milliseconds{1}), std::future_status::ready);
+
+    const auto result = submission.future.get();
+
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error.code, SdoScheduler::ErrorCode::CANCELLED);
+    EXPECT_EQ(scheduler.num_jobs_pending(), 0);
+}
+
+TEST(SdoSchedulerTest, CANCEL_ALL)
+{
+    SdoScheduler scheduler;
+
+    auto first_submission = scheduler.enqueue_read(1, 0x6064, 0x00, 4);
+    auto second_submission = scheduler.enqueue_write(1, 0x6060, 0x00, {0x08});
+
+    ASSERT_NE(first_submission.id, SdoScheduler::INVALID_JOB_ID);
+    ASSERT_NE(second_submission.id, SdoScheduler::INVALID_JOB_ID);
+
+    EXPECT_EQ(scheduler.num_jobs_pending(), 2);
+
+    scheduler.cancel_all();
+
+    ASSERT_EQ(first_submission.future.wait_for(std::chrono::milliseconds{1}), std::future_status::ready);
+    ASSERT_EQ(second_submission.future.wait_for(std::chrono::milliseconds{1}), std::future_status::ready);
+
+    const auto first_result = first_submission.future.get();
+    const auto second_result = second_submission.future.get();
+
+    ASSERT_FALSE(first_result);
+    ASSERT_FALSE(second_result);
+
+    EXPECT_EQ(first_result.error.code, SdoScheduler::ErrorCode::CANCELLED);
+    EXPECT_EQ(second_result.error.code, SdoScheduler::ErrorCode::CANCELLED);
+
+    EXPECT_EQ(scheduler.num_jobs_pending(), 0);
 }
