@@ -78,7 +78,7 @@ public:
   }
 
   template <typename T> auto sdo_read(
-    uint16_t device_id, uint16_t index, uint8_t subindex, uint8_t value_size, uint8_t value_type = 0)
+    uint16_t device_id, uint16_t index, uint8_t subindex, uint16_t value_size, uint8_t value_type = 0)
   {
     auto client = this->create_client<rise_motion_messages::srv::SDOReadSrv>("sdo_read");
 

@@ -2,7 +2,7 @@ uint16 device_id
 uint16 index
 uint8 subindex
 uint8 value_type
-uint8 value_size
+uint16 value_size
 ---
 int8 status_code
 uint16 device_id
