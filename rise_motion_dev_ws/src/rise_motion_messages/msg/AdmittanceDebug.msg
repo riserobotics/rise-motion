@@ -25,3 +25,18 @@ float64[] vdot_deg          # [deg/s^2]
 float64[] velocity_raw_deg  # [deg/s]
 float64[] velocity_output_deg # [deg/s]
 float64[] displacement_deg  # [deg]
+
+# Measured joint velocity (velocity_fb converted from motor RPM to joint rad/s)
+float64[] velocity_fb_joint  # [rad/s]  velocity_value [RPM] * 2π/60 / gear_ratio
+
+# Compensation torques at joint level [Nm] — observer only, same formula as comp functions
+float64[] tau_gravity_nm    # [Nm]  mgl * cos(pos_rad + angle_offset); 0 if disabled
+float64[] tau_friction_nm   # [Nm]  (tau_c * tanh(k*v) + b*v) * scale; 0 if disabled or |v|>max_vel
+
+# Observed joint acceleration (differentiated velocity_fb, no controller feedback)
+float64[] accel_raw       # [rad/s^2]  (v_fb[k] - v_fb[k-1]) / dt  — joint-level
+float64[] accel_filtered  # [rad/s^2]  EMA low-pass (accel_filter_cutoff_hz)
+
+# Measured motor torque (0x6077), converted to joint [Nm]
+# = torque_value [‰ rated] / 1000 * rated_torque_motor [Nm] * gear_ratio
+float64[] torque_fb       # [Nm]  at joint
