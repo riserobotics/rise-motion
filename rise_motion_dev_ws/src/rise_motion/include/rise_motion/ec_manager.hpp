@@ -29,6 +29,10 @@ public:
   bool sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value, uint8 value_size);
   bool sdo_write(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
 
+  // Wrappers for SOEM ecx_FOEread, ecx_FOEwrite
+  bool foe_read(const uint16 device_id, std::string_view filename, const uint32 password, std::vector<uint8> &file, const uint16 file_size);
+  bool foe_write(const uint16 device_id, std::string filename, const uint32 password, std::vector<uint8> &file);
+
 private:
   uint16 transition_ec(uint16 state);
   bool transition_motors_to(CiA402Motor::State state);

@@ -1,0 +1,10 @@
+uint16 device_id
+string filename
+uint32 password
+uint16 file_size
+---
+int8 status_code
+uint16 device_id
+string filename
+uint32 password
+uint8[] file

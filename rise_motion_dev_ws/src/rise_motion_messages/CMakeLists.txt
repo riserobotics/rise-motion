@@ -16,6 +16,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/EnableEthercatSrv.srv"
   "srv/SDOReadSrv.srv"
   "srv/SDOWriteSrv.srv"
+  "srv/FOEReadSrv.srv"
+  "srv/FOEWriteSrv.srv"
  )
 
 if(BUILD_TESTING)

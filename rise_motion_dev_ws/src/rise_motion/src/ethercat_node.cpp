@@ -32,6 +32,14 @@ EthercatNode::EthercatNode(ECManager &ec_manager)
   sdo_write_srv_ = create_service<rise_motion_messages::srv::SDOWriteSrv>(
       "sdo_write",
       std::bind(&EthercatNode::sdoWriteServiceCallback, this, _1, _2));
+  
+  foe_read_srv_ = create_service<rise_motion_messages::srv::FOEReadSrv>(
+      "foe_read",
+      std::bind(&EthercatNode::foeReadServiceCallback, this, _1, _2));
+
+  foe_write_srv_ = create_service<rise_motion_messages::srv::FOEWriteSrv>(
+      "foe_write",
+      std::bind(&EthercatNode::foeWriteServiceCallback, this, _1, _2));
 
   RCLCPP_INFO(get_logger(), "EtherCAT node initialized");
 }
@@ -157,4 +165,55 @@ void EthercatNode::sdoWriteServiceCallback(
   response->index	= request->index;
   response->subindex	= request->subindex;
   response->value_type = request->value_type;
+}
+
+void EthercatNode::foeReadServiceCallback(
+    const std::shared_ptr<rise_motion_messages::srv::FOEReadSrv::Request>
+	request,
+    std::shared_ptr<rise_motion_messages::srv::FOEReadSrv::Response> response) {
+
+  if (!ethercat_enabled_ || !ec_manager_.is_running()) {
+    response->status_code = 0;
+    return;
+  }
+
+  std::vector<uint8> file;
+  bool success = ec_manager_.foe_read(request->device_id, request->filename,
+				      request->password, file, request->file_size);
+
+    if (!success) {
+    RCLCPP_WARN(get_logger(), "FOE read failed");
+    response->status_code = 0;
+    return;
+  }
+
+  response->status_code = 1;
+  response->device_id	= request->device_id;
+  response->filename	= request->filename;
+  response->password	= request->password;
+  response->file	= file;
+}
+void EthercatNode::foeWriteServiceCallback(
+    const std::shared_ptr<rise_motion_messages::srv::FOEWriteSrv::Request>
+	request,
+    std::shared_ptr<rise_motion_messages::srv::FOEWriteSrv::Response>
+	response) {
+  if (!ethercat_enabled_ || !ec_manager_.is_running()) {
+    response->status_code = 0;
+    return;
+  }
+  RCLCPP_INFO(get_logger(), "Got foe_write request");
+  bool success = ec_manager_.foe_write(request->device_id, request->filename,
+				       request->password, request->file);
+  RCLCPP_INFO(get_logger(), "%d", success);
+  if (!success) {
+    RCLCPP_INFO(get_logger(), "FOE write failed");
+    response->status_code = 0;
+    return;
+  }
+
+  response->status_code = 1;
+  response->device_id	= request->device_id;
+  response->filename	= request->filename;
+  response->password	= request->password;
 }

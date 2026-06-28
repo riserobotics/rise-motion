@@ -339,6 +339,43 @@ bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
   return true;
 }
 
+bool ECManager::foe_read(const uint16 device_id, 
+                         std::string_view filename, const uint32 password,
+                         std::vector<uint8> &file, const uint16 file_size) {
+
+  int psize = file_size;
+  uint8 *buf = new uint8[psize];
+
+  std::vector<char> fname_buf(filename.begin(), filename.end());
+  fname_buf.push_back('\0');
+
+  int wkc = ecx_FOEread(&ctx, device_id, fname_buf.data(), password, &psize,
+                        (void *)buf, EC_TIMEOUTRXM);
+
+  file.clear();
+  for (int i = 0; i < psize; i++) {
+    file.push_back(buf[i]);
+  }
+  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
+  return true;
+}
+
+bool ECManager::foe_write(const uint16 device_id, std::string filename, 
+                          const uint32 password, std::vector<uint8> &file) {
+  int psize = file.size();
+  uint8 *buf = &file[0];
+
+  // even though filename is a string_view, we need to convert it to a null-terminated char array for SOEM
+  // for some reason it doesn't takes char instead const char*
+  std::vector<char> fname_buf(filename.begin(), filename.end());
+  fname_buf.push_back('\0');
+
+  int wkc = ecx_FOEwrite(&ctx, device_id, fname_buf.data(), password, psize,
+                        (void *)buf, EC_TIMEOUTRXM);
+  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
+  return true;
+}
+
 bool ECManager::transition_motors_to(CiA402Motor::State state) {
   int tries_left = 1000;
   int continue_flag = 1;
