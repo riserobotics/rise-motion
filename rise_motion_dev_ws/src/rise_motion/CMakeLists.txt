@@ -16,7 +16,10 @@ add_subdirectory(SOEM)
 
 # --- sdo_serializer library ---
 add_library(sdo_serializer_lib INTERFACE)
-target_include_directories(sdo_serializer_lib INTERFACE include)
+target_include_directories(sdo_serializer_lib INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
 add_executable(
 	rise_motion_main
@@ -68,5 +71,19 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+
+install(
+  TARGETS sdo_serializer_lib
+  EXPORT export_sdo_serializer_lib
+  INCLUDES DESTINATION include
+)
+
+ament_export_targets(export_sdo_serializer_lib)
+ament_export_include_directories(include)
 
 ament_package()

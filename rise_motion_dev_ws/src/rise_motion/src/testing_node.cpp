@@ -2,11 +2,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
 #include <rclcpp/client.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rise_motion_messages/msg/motor_positions.hpp>
 #include <rise_motion_messages/srv/enable_ethercat_srv.hpp>
+#include <rise_motion_messages/srv/sdo_read_srv.hpp>
+#include <rise_motion_messages/srv/sdo_write_srv.hpp>
+#include <rise_motion/sdo_serializer.hpp>
 
 
 class TestNode : public rclcpp::Node {
@@ -73,6 +77,77 @@ public:
     return result->status_enable;
   }
 
+  template <typename T> auto sdo_read(
+    uint16_t device_id, uint16_t index, uint8_t subindex, uint8_t value_size, uint8_t value_type = 0)
+  {
+    auto client = this->create_client<rise_motion_messages::srv::SDOReadSrv>("sdo_read");
+
+    while (!client->wait_for_service(std::chrono::seconds(1))) {
+      if (!rclcpp::ok()) {
+        return rise::Result<T, sdo::Error>::err({
+          sdo::ErrorCode::ServiceUnavailable, "Interrupted while waiting for sdo_read service"});
+      }
+    }
+
+    auto request = std::make_shared<rise_motion_messages::srv::SDOReadSrv::Request>();
+
+    request->device_id = device_id;
+    request->index = index;
+    request->subindex = subindex;
+    request->value_size = value_size;
+    request->value_type = value_type;
+
+    auto future = client->async_send_request(request);
+
+    if (rclcpp::spin_until_future_complete(
+      this->get_node_base_interface(), future) != rclcpp::FutureReturnCode::SUCCESS){
+      client->remove_pending_request(future);
+      return rise::Result<T, sdo::Error>::err({
+        sdo::ErrorCode::CallFailed, "Failed to call sdo_read service"});
+    }
+
+    return sdo::deserialize<T>(future.get()->value);
+  }
+
+  template <typename T>auto sdo_write(
+    uint16_t device_id, uint16_t index, uint8_t subindex, const T &value, uint8_t value_type = 0)
+{
+  auto serialized = sdo::serialize<T>(value);
+
+  if (!serialized){
+    return rise::Result<bool, sdo::Error>::err(serialized.error);
+  }
+
+  auto client = this->create_client<rise_motion_messages::srv::SDOWriteSrv>("sdo_write");
+
+  while (!client->wait_for_service(std::chrono::seconds(1))){
+    if (!rclcpp::ok()){
+      return rise::Result<bool, sdo::Error>::err({
+          sdo::ErrorCode::ServiceUnavailable, "Interrupted while waiting for sdo_write service"});
+    }
+  }
+
+  auto request = std::make_shared<rise_motion_messages::srv::SDOWriteSrv::Request>();
+
+  request->device_id = device_id;
+  request->index = index;
+  request->subindex = subindex;
+  request->value_type = value_type;
+  request->value = serialized.value;
+
+  auto future = client->async_send_request(request);
+
+  if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), future) != rclcpp::FutureReturnCode::SUCCESS){
+    client->remove_pending_request(future);
+
+    return rise::Result<bool, sdo::Error>::err({
+        sdo::ErrorCode::CallFailed, "Failed to call sdo_write service"});
+  }
+
+  return rise::Result<bool, sdo::Error>::ok(true);
+}
+
+
 private:
   std::vector<int> motor_pos;
   void print_motor_positions(std::vector<int32_t> const &motor_pos,
@@ -113,6 +188,16 @@ int main(int argc, char **argv) {
 
   while (!node->request_enable_ethercat()) {
   }
+  
+  // example sdo read
+  auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 0, 50);
+  if(!result){
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), result.error.message.std::string::c_str());
+  }
+  else{
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "sdo_value: %s", (std::string(result.value).std::string::c_str()));
+  }
+
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
