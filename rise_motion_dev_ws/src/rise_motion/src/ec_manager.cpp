@@ -103,7 +103,13 @@ void ECManager::cyclic_loop() {
   running_ = true;
 
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
+  std::vector<int32_t> motor_velocities(ctx.slavecount, 0);
+  std::vector<int16_t> torque_offsets(ctx.slavecount, 0);
+  std::vector<int16_t> motor_torques(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
+  std::vector<MotorFeedbackData> full_feedback(ctx.slavecount);
+  int wkc_error_count = 0;
+  static constexpr int kMaxWkcErrors = 5;
 
   // Transition to OPERATIONAL
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
@@ -147,9 +153,16 @@ void ECManager::cyclic_loop() {
     ecx_mbxhandler(&ctx, 0, 4);
 
     if (wkc != expectedWKC) {
-      RCLCPP_ERROR(logger, "Not all nodes responded");
-      shutdown();
-      return;
+      wkc_error_count++;
+      RCLCPP_WARN(logger, "WKC mismatch (%d/%d): got %d, expected %d",
+                  wkc_error_count, kMaxWkcErrors, wkc, expectedWKC);
+      if (wkc_error_count >= kMaxWkcErrors) {
+        RCLCPP_ERROR(logger, "Not all nodes responded");
+        shutdown();
+        return;
+      }
+    } else {
+      wkc_error_count = 0;
     }
 
     // Iterate over connected drives
@@ -167,10 +180,47 @@ void ECManager::cyclic_loop() {
         return;
       }
 
-      // Try to get new data
+      // CiA402 Mode-Switching:
+      // 1. Write target mode every cycle; drive confirms via OpModeDisplay (1-10ms delay)
+      // 2. During transition (OpModeDisplay != target): hold position, zero velocity (safe)
+      // 3. Once confirmed: send commands for the active mode
       cmd_apsa.perf_read(motor_commands);
-      m.outputs->TargetPosition = motor_commands[i];
+      vel_cmd_apsa.perf_read(motor_velocities);
+      torque_offset_apsa.perf_read(torque_offsets);
+      torque_cmd_apsa.perf_read(motor_torques);
+      const int8_t target = target_mode_.load(std::memory_order_relaxed);
+      m.outputs->OpMode = target;
+      const bool mode_confirmed = (m.inputs->OpModeDisplay == target);
+      if (!mode_confirmed) {
+        m.outputs->TargetVelocity = 0;
+        m.outputs->TargetTorque   = 0;
+        m.outputs->TargetPosition = m.inputs->PositionValue;
+      } else if (target == 10) { // CyclicSyncTorqueMode
+        m.outputs->TargetTorque = motor_torques[i];
+      } else if (target == 9) {  // CyclicSyncVelocityMode
+        m.outputs->TargetVelocity = motor_velocities[i];
+      } else {                   // CyclicSyncPositionMode (default)
+        m.outputs->TargetPosition = motor_commands[i];
+      }
+      m.outputs->TorqueOffset = torque_offsets[i];
       motor_feedback[i] = m.inputs->PositionValue;
+
+      full_feedback[i].statusword                     = m.inputs->Statusword;
+      full_feedback[i].op_mode_display                = m.inputs->OpModeDisplay;
+      full_feedback[i].position                       = m.inputs->PositionValue;
+      full_feedback[i].velocity_value                 = m.inputs->VelocityValue;
+      full_feedback[i].torque_value                   = m.inputs->TorqueValue;
+      full_feedback[i].analog_input1                  = m.inputs->AnalogInput1;
+      full_feedback[i].analog_input2                  = m.inputs->AnalogInput2;
+      full_feedback[i].analog_input3                  = m.inputs->AnalogInput3;
+      full_feedback[i].analog_input4                  = m.inputs->AnalogInput4;
+      full_feedback[i].tuning_status                  = m.inputs->TuningStatus;
+      full_feedback[i].digital_inputs                 = m.inputs->DigitalInputs;
+      full_feedback[i].user_miso                      = m.inputs->UserMISO;
+      full_feedback[i].timestamp                      = m.inputs->Timestamp;
+      full_feedback[i].position_demand_internal_value = m.inputs->PositionDemandInternalValue;
+      full_feedback[i].velocity_demand_value          = m.inputs->VelocityDemandValue;
+      full_feedback[i].torque_demand                  = m.inputs->TorqueDemand;
 
       RCLCPP_DEBUG(logger,
                    "Motor Outputs:\n"
@@ -221,6 +271,7 @@ void ECManager::cyclic_loop() {
 
     // Make feedback available to ROS publisher (wait-free)
     feedback_apsa.perf_write(motor_feedback);
+    full_feedback_apsa.perf_write(full_feedback);
 
     // Sleep until next cycle (maintains 1kHz frequency)
     std::this_thread::sleep_until(next);
@@ -258,6 +309,27 @@ bool ECManager::set_motor_values_apsa(
     const std::vector<int32_t> &motor_values) {
   // comm_write() queues the data for the EtherCAT loop to pick up
   return cmd_apsa.comm_write(motor_values);
+}
+
+bool ECManager::get_full_feedback_apsa(std::vector<MotorFeedbackData> &feedback) {
+  return full_feedback_apsa.comm_read(feedback);
+}
+
+bool ECManager::set_motor_velocity_apsa(const std::vector<int32_t>& velocities) {
+  return vel_cmd_apsa.comm_write(velocities);
+}
+
+bool ECManager::set_torque_offset_apsa(const std::vector<int16_t>& offsets) {
+  return torque_offset_apsa.comm_write(offsets);
+}
+
+bool ECManager::set_motor_torque_apsa(const std::vector<int16_t>& torques) {
+  return torque_cmd_apsa.comm_write(torques);
+}
+
+void ECManager::set_operation_mode(int8_t mode) {
+  target_mode_.store(mode, std::memory_order_relaxed);
+  RCLCPP_INFO(logger, "Operation mode target set to %d", mode);
 }
 
 uint16 ECManager::transition_ec(uint16 state) {
@@ -308,10 +380,10 @@ uint16 ECManager::transition_ec(uint16 state) {
   return reached_state;
 }
 
-bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
-                         std::vector<uint8> &value) {
+bool ECManager::sdo_read(uint16_t device_id, uint16_t index, uint8_t subindex,
+                         std::vector<uint8_t> &value) {
   int psize = 64;
-  uint8 *buf = new uint8[psize];
+  uint8_t *buf = new uint8_t[psize];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize,
@@ -326,10 +398,10 @@ bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
   return true;
 }
 
-bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
-                          std::vector<uint8> &value) {
+bool ECManager::sdo_write(uint16_t device_id, uint16_t index, uint8_t subindex,
+                          std::vector<uint8_t> &value) {
   int psize = value.size();
-  uint8 *buf = new uint8[psize];
+  uint8_t *buf = new uint8_t[psize];
 
   boolean CA = FALSE;
   int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
@@ -358,6 +430,10 @@ bool ECManager::transition_motors_to(CiA402Motor::State state) {
       } else if (m.get_state().value() == CiA402Motor::State::FAULT) {
         RCLCPP_ERROR(logger, "Motor %zu in fault", i + 1);
         return false;
+      } else if (m.get_state().value() == CiA402Motor::State::QUICK_STOP_ACTIVE) {
+        RCLCPP_WARN(logger, "Motor %zu in quick stop, transitioning to SWITCH_ON_DISABLED", i + 1);
+        m.transition_to(CiA402Motor::State::SWITCH_ON_DISABLED);
+        continue_flag = 1;
       } else if (m.get_state().value() != state) {
         m.transition_to(state);
         continue_flag = 1;

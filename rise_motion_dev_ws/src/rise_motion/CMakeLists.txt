@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rise_motion_messages REQUIRED)
+find_package(std_msgs REQUIRED)
 
 include_directories(include)
 
@@ -36,6 +37,22 @@ install(TARGETS
   rise_motion_main
   DESTINATION lib/${PROJECT_NAME}
 )
+
+add_executable(rise_motion_mock
+  src/main_mock.cpp
+  src/ec_manager_mock.cpp
+  src/ethercat_node.cpp
+)
+ament_target_dependencies(
+  rise_motion_mock
+  rclcpp
+  rise_motion_messages
+)
+install(TARGETS
+  rise_motion_mock
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 
 add_executable(testing_node
   src/testing_node.cpp

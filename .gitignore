@@ -1,5 +1,11 @@
 **/build/
 **/log/
 **/install/
+rosbag2_*/
 **/*~
 .vscode
+.claude
+CLAUDE.md
+plans/
+SOMANET Circulo Safe Motion.pdf
+docs/

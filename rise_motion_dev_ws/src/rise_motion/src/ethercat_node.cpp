@@ -7,12 +7,24 @@
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-EthercatNode::EthercatNode(ECManager &ec_manager)
+EthercatNode::EthercatNode(IECManager &ec_manager)
     : Node("ethercat_node"), ec_manager_(ec_manager) {
 
   cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorPositions>(
       "motor_commands", 10,
       std::bind(&EthercatNode::commandCallback, this, _1));
+
+  cmd_vel_sub_ = create_subscription<rise_motion_messages::msg::MotorVelocity>(
+      "motor_commands_vel", 10,
+      std::bind(&EthercatNode::velocityCommandCallback, this, _1));
+
+  torque_offset_sub_ = create_subscription<rise_motion_messages::msg::MotorTorqueOffset>(
+      "motor_torque_offset", 10,
+      std::bind(&EthercatNode::torqueOffsetCallback, this, _1));
+
+  torque_cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorTorqueOffset>(
+      "motor_commands_torque", 10,
+      std::bind(&EthercatNode::torqueCommandCallback, this, _1));
 
   feedback_pub_ = create_publisher<rise_motion_messages::msg::MotorPositions>(
       "motor_feedback", 10);
@@ -21,9 +33,21 @@ EthercatNode::EthercatNode(ECManager &ec_manager)
       create_wall_timer(std::chrono::milliseconds(10),
 			std::bind(&EthercatNode::publishFeedback, this));
 
+  full_feedback_pub_ =
+      create_publisher<rise_motion_messages::msg::MotorFeedbackFull>(
+          "motor_feedback_full", 10);
+
+  full_feedback_timer_ =
+      create_wall_timer(std::chrono::milliseconds(10),
+                        std::bind(&EthercatNode::publishFullFeedback, this));
+
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
       "enable_ethercat",
       std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
+
+  mode_srv_ = create_service<rise_motion_messages::srv::SetOperationModeSrv>(
+      "set_operation_mode",
+      std::bind(&EthercatNode::setOperationModeCallback, this, _1, _2));
 
   sdo_read_srv_ = create_service<rise_motion_messages::srv::SDOReadSrv>(
       "sdo_read",
@@ -91,7 +115,7 @@ void EthercatNode::enableServiceCallback(
       RCLCPP_ERROR(get_logger(), "Couldn't init ethercat");
     } else {
       ec_thread_ =
-	  std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
+	  std::make_unique<std::thread>([this]() { ec_manager_.cyclic_loop(); });
       ethercat_enabled_ = true;
     }
   } else if (!request->enable && ethercat_enabled_) {
@@ -116,7 +140,7 @@ void EthercatNode::sdoReadServiceCallback(
     return;
   }
 
-  std::vector<uint8> value;
+  std::vector<uint8_t> value;
   bool success = ec_manager_.sdo_read(request->device_id, request->index,
 				      request->subindex, value);
 
@@ -133,6 +157,80 @@ void EthercatNode::sdoReadServiceCallback(
   response->value	= value;
   response->value_type	= 0;
 }
+void EthercatNode::velocityCommandCallback(
+    rise_motion_messages::msg::MotorVelocity::SharedPtr msg) {
+  std::vector<int32_t> velocities(msg->velocities.begin(), msg->velocities.end());
+  if (!ec_manager_.set_motor_velocity_apsa(velocities)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue velocity commands");
+  }
+}
+
+void EthercatNode::torqueOffsetCallback(
+    rise_motion_messages::msg::MotorTorqueOffset::SharedPtr msg) {
+  std::vector<int16_t> offsets(msg->torque_offsets.begin(), msg->torque_offsets.end());
+  if (!ec_manager_.set_torque_offset_apsa(offsets)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue torque offsets");
+  }
+}
+
+void EthercatNode::torqueCommandCallback(
+    rise_motion_messages::msg::MotorTorqueOffset::SharedPtr msg) {
+  std::vector<int16_t> torques(msg->torque_offsets.begin(), msg->torque_offsets.end());
+  if (!ec_manager_.set_motor_torque_apsa(torques)) {
+    RCLCPP_WARN(get_logger(), "Failed to queue torque commands");
+  }
+}
+
+void EthercatNode::setOperationModeCallback(
+    std::shared_ptr<rise_motion_messages::srv::SetOperationModeSrv::Request> request,
+    std::shared_ptr<rise_motion_messages::srv::SetOperationModeSrv::Response> response) {
+  if (!ethercat_enabled_) {
+    response->success = false;
+    response->message = "EtherCAT not enabled";
+    return;
+  }
+  if (request->mode != 8 && request->mode != 9 && request->mode != 10) {
+    response->success = false;
+    response->message = "Invalid mode " + std::to_string(request->mode) + ". Supported: 8 (Position), 9 (Velocity), 10 (Torque).";
+    RCLCPP_WARN(get_logger(), "Rejected unsupported operation mode %d", request->mode);
+    return;
+  }
+  ec_manager_.set_operation_mode(request->mode);
+  response->success = true;
+  if (request->mode == 10)      response->message = "Torque mode active (mode 10)";
+  else if (request->mode == 9)  response->message = "Velocity mode active (mode 9)";
+  else                          response->message = "Position mode active (mode 8)";
+  RCLCPP_INFO(get_logger(), "Operation mode set to %d", request->mode);
+}
+
+void EthercatNode::publishFullFeedback() {
+  std::vector<MotorFeedbackData> feedback;
+
+  if (ethercat_enabled_ && ec_manager_.get_full_feedback_apsa(feedback)) {
+    auto msg = rise_motion_messages::msg::MotorFeedbackFull();
+    msg.header.stamp = now();
+    for (const auto& f : feedback) {
+      msg.statusword.push_back(f.statusword);
+      msg.op_mode_display.push_back(f.op_mode_display);
+      msg.positions.push_back(f.position);
+      msg.velocity_value.push_back(f.velocity_value);
+      msg.torque_value.push_back(f.torque_value);
+      msg.analog_input1.push_back(f.analog_input1);
+      msg.analog_input2.push_back(f.analog_input2);
+      msg.analog_input3.push_back(f.analog_input3);
+      msg.analog_input4.push_back(f.analog_input4);
+      msg.tuning_status.push_back(f.tuning_status);
+      msg.digital_inputs.push_back(f.digital_inputs);
+      msg.user_miso.push_back(f.user_miso);
+      msg.timestamp.push_back(f.timestamp);
+      msg.position_demand_internal_value.push_back(f.position_demand_internal_value);
+      msg.velocity_demand_value.push_back(f.velocity_demand_value);
+      msg.torque_demand.push_back(f.torque_demand);
+    }
+    full_feedback_pub_->publish(msg);
+  }
+}
+
 void EthercatNode::sdoWriteServiceCallback(
     const std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Request>
 	request,
