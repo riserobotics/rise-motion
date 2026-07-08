@@ -14,6 +14,13 @@ float64[] torque_raw        # [Nm]     force_filtered * lever_arm -> input to co
 # Absolute motor position (encoder ticks / enc_per_rad) — same reference as pos_min/max limits
 float64[] pos_rad           # [rad]      absolute encoder position
 
+# Position relative to a user-settable zero point (tare), for experiments where the raw
+# absolute encoder origin is meaningless (e.g. sinus-reference tracking). Zeroed via the
+# ~/zero_position service (captures current pos_rad as the new origin). Purely informational
+# — never used for pos_min/max limit checks or any control law, those stay on pos_rad.
+float64[] pos_rel_rad        # [rad]      pos_rad - offset from last ~/zero_position call
+float64[] pos_rel_deg        # [deg]      same, in degrees
+
 # Admittance integration (rad)
 float64[] vdot              # [rad/s^2]  angular acceleration
 float64[] velocity_raw      # [rad/s]    after Euler integration (before safety)
