@@ -189,8 +189,12 @@ int main(int argc, char **argv) {
   while (!node->request_enable_ethercat()) {
   }
   
+  // TODO: solve this inside the ec_manager instead of relying on the user adding this delay
+  // important to prevent potential errors in ec_manager when sending an SDO requests while PDOs and SDOs are not fully initialized yet
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  
   // example sdo read
-  auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 0, 50);
+  auto result = node->sdo_read<sdo::STRING<50>>(1, 0x1008, 0, 50);
   if(!result){
     RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), result.error.message.std::string::c_str());
   }
