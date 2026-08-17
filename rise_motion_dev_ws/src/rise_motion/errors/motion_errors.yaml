@@ -1,0 +1,159 @@
+---
+# prefix for ui and log -> full code e.g = [TPL-101]
+start_code: PYS              
+
+# Build-time errors
+# Generates exception classes (check docs) for build-time
+# USE THESE FOR EXCEPTIONS, OTHERWISE FLAKE8 ERRORS! (and better doc)
+build:
+  - name: BuildTimeError                                   # Name of the exception in code
+    code: "001"                                            # 3 digit code (for doc and UI)
+    description: "What went wrong with '{placeholder}'"   # use {placeholders} -> can be filled in code that raises the error
+    remedy: "What the user should do about it"            # What user should do to fix
+
+  - name: MyBuildError
+    code: "002"
+    description: "What went wrong with '{placeholder}' at build time"
+    remedy: "What the user should do about it"
+
+  - [ ... ]
+
+# Runtime errors 
+# Generates functions for raising, logging and publishing runtime errors for error_monitor
+runtime:
+
+  - name: "CouldntInitSoemContext"
+    code: "101"
+    description: "No Context = no operational state = SOEM failed to start"
+    remedy: "Correct LAN-port hardcoded? Does motion executable have necessary permissions? LAN-port broken?"
+
+    # 0 - Warning (ROS_WARN, log)
+    # 1 - Error   (ROS_ERROR, log, sets this node to failsafe, UI can acknowledge and clear)
+    # 2 - Critical (ROS_FATAL, log, sets ALL nodes to failsafe, UI CANNOT acknowledge -> hard reset)  
+    severity: 2
+
+    # Debouncer -> same error will not be published/logged more than once inside this window
+    # DONT FORGET TO SET THIS WHEN CALLED IN LOOPS --> SPAMS MESSAGES OTHERWISE
+    debounce_s: 0 
+
+    # Time until auto clear of error (if error does not re-occur)
+    # 0 -> error latches until cleared or acknowledged
+    auto_clear_s: 30.0
+
+    # raise severity when error fires too often
+    escalate:
+      count: 5               # occurrences inside the window
+      window_s: 10.0         # time window
+      to: 2                 # severity applied once the threshold is hit
+
+    # Error handler functions (maybe?)
+    # will generate a folder "rise_ws/src/package_name/error_handlers" with templates for the error handler functions
+    # Error_monitor will call these functions when the error is raised
+    # error_handler:
+    #   - name: nothingYouCanDo
+    #     description: "I don't think this error can be handled."
+    #     args:
+    #       - name: parameter_a
+    #         type: int
+
+    #   - name: restart_node
+    #     description: "Restart the node"
+
+
+  - name: "EthercatNodesDiscoveryFailed"
+    code: "102"
+    description: "No EtherCAT slaves found in network."
+    remedy: "Second EtherCAT master running by accident? Connection between devices unplugged/broken?"
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 10.0
+      to: 2
+    # error_handler:
+    #   - name: ReInitEtherCAT
+    #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
+
+  - name: "NotAllNodesEC_STATE_PRE_OP"
+    code: "103"
+    description: "Slaves should be in pre-operational state due to EC Nodes discovery step, they aren't."
+    remedy: "Restart Motors by cutting power, re-init EtherCAT. Second EtherCAT master running by accident? Connection between devices unplugged/broken?"
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+    # error_handler:
+    #   - name: ReInitEtherCAT
+    #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
+
+  - name: "SlavecountLowerThanConfig"
+    code: "104"
+    description: "Config specifies '{config_slavenumb}' slaves, discovered '{ctx_slavenumb}'"
+    remedy: "Second EtherCAT master running by accident? Connection between devices unplugged/broken?"
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+    # error_handler:
+    #   - name: ReInitEtherCAT
+    #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
+
+  - name: "BufferTooSmallForIOMap"
+    code: "105"
+    description: "Hardcoded buffer size: '{IO_MAP_SIZE}' bytes, but IOMap size is '{ret}' bytes"
+    remedy: "Find out why the IOMap is bigger than expected. Check for typos in the config file. Enlarge buffer."
+    severity: 2
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+    # error_handler:
+    #   - name: ReInitEtherCAT
+    #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
+
+  - name: "BufferTooSmallForIOMap"
+    code: "106"
+    description: "Hardcoded buffer size: '{IO_MAP_SIZE}' bytes, but IOMap size is '{ret}' bytes"
+    remedy: "Find out why the IOMap is bigger than expected. Check for typos in the config file. Enlarge buffer."
+    severity: 2
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+    # error_handler:
+    #   - name: ReInitEtherCAT
+    #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
+
+  - name: "CouldntInitEthercat"
+    code: "110"
+    description: "Couldn't init EtherCAT, due to EXIT_FAILURE in ec_manager.cpp"
+    remedy: "Watch for other errors, especialy SOEM errors."
+    severity: 2
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+    # error_handler:
+    #   - name: ReInitEtherCAT
+    #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
+
+  

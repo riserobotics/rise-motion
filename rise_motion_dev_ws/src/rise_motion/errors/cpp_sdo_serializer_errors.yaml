@@ -1,0 +1,95 @@
+---
+# prefix for ui and log -> full code e.g = [TPL-101]
+start_code: CPS              
+
+# Build-time errors
+# Generates exception classes (check docs) for build-time
+# USE THESE FOR EXCEPTIONS, OTHERWISE FLAKE8 ERRORS! (and better doc)
+build:
+  - name: BuildTimeError                                   # Name of the exception in code
+    code: "001"                                            # 3 digit code (for doc and UI)
+    description: "What went wrong with '{placeholder}'"   # use {placeholders} -> can be filled in code that raises the error
+    remedy: "What the user should do about it"            # What user should do to fix
+
+  - name: MyBuildError
+    code: "002"
+    description: "What went wrong with '{placeholder}' at build time"
+    remedy: "What the user should do about it"
+
+  - [ ... ]
+
+# Runtime errors 
+# Generates functions for raising, logging and publishing runtime errors for error_monitor
+runtime:
+
+  - name: "InvalidSize"
+    code: "101"
+    description: "During runtime in cpp sdo serializer: '{placeholder}'"
+    remedy: "TODO"
+
+    # 0 - Warning (ROS_WARN, log)
+    # 1 - Error   (ROS_ERROR, log, sets this node to failsafe, UI can acknowledge and clear)
+    # 2 - Critical (ROS_FATAL, log, sets ALL nodes to failsafe, UI CANNOT acknowledge -> hard reset)  
+    severity: 1
+
+    # Debouncer -> same error will not be published/logged more than once inside this window
+    # DONT FORGET TO SET THIS WHEN CALLED IN LOOPS --> SPAMS MESSAGES OTHERWISE
+    debounce_s: 0 
+
+    # Time until auto clear of error (if error does not re-occur)
+    # 0 -> error latches until cleared or acknowledged
+    auto_clear_s: 30.0
+
+    # raise severity when error fires too often
+    escalate:
+      count: 5               # occurrences inside the window
+      window_s: 10.0         # time window
+      to: 2                 # severity applied once the threshold is hit
+
+    # Error handler functions (maybe?)
+    # will generate a folder "rise_ws/src/package_name/error_handlers" with templates for the error handler functions
+    # Error_monitor will call these functions when the error is raised
+    # error_handler:
+    #   - name: nothingYouCanDo
+    #     description: "I don't think this error can be handled."
+    #     args:
+    #       - name: parameter_a
+    #         type: int
+
+    #   - name: restart_node
+    #     description: "Restart the node"
+
+  - name: "OutOfRange"
+    code: "102"
+    description: "During runtime in cpp sdo serializer: '{placeholder}'"
+    remedy: "TODO"
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 5
+      window_s: 10.0
+      to: 2
+    # error_handler:
+    #   - name: restart_node
+    #     description: "Restart the node"
+
+  - name: "UnsupportedType"
+    code: "103"
+    description: "During runtime in cpp sdo serializer: '{placeholder}'"
+    remedy: "TODO"
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 5
+      window_s: 10.0
+      to: 2
+    # error_handler:
+    #   - name: restart_node
+    #     description: "Restart the node"
+
+    # TODO rather than torturing the ErrorCode classes from sdo_serializer.hpp into this format 
+    # it's probably better to refactor the error handling in sdo_serializer.hpp
