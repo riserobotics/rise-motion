@@ -123,12 +123,12 @@ runtime:
     # error_handler:
     #   - name: ReInitEtherCAT
     #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
-
-  - name: "BufferTooSmallForIOMap"
+  
+  - name: "NotAllNodesEC_STATE_SAFE_OP"
     code: "106"
-    description: "Hardcoded buffer size: '{IO_MAP_SIZE}' bytes, but IOMap size is '{ret}' bytes"
-    remedy: "Find out why the IOMap is bigger than expected. Check for typos in the config file. Enlarge buffer."
-    severity: 2
+    description: "Slaves should be in safe-operational state after IO mapping, they aren't."
+    remedy: ""
+    severity: 1
     debounce_s: 0
     auto_clear_s: 30.0
 
@@ -140,8 +140,125 @@ runtime:
     #   - name: ReInitEtherCAT
     #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
 
-  - name: "CouldntInitEthercat"
+  - name: "CouldntTransitionMotorsToOperationEnabled"
+    code: "107"
+    description: "Couldn't transition all motors to OPERATION_ENABLED"
+    remedy: ""
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+
+  - name: "EthercatWkcMismatch"
+    code: "108"
+    description: "Not all nodes responded to process data exchange (unexpected working counter)"
+    remedy: ""
+    severity: 1
+    debounce_s: 1.0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 5
+      window_s: 10.0
+      to: 2
+
+  - name: "MotorHasNoState"
+    code: "109"
+    description: "Motor '{motor_id}' has no decodable state during cyclic operation"
+    remedy: ""
+    severity: 1
+    debounce_s: 1.0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 5
+      window_s: 10.0
+      to: 2
+
+  - name: "MotorNotOperationEnabled"
     code: "110"
+    description: "Motor '{motor_id}' is not in OPERATION_ENABLED during cyclic operation"
+    remedy: ""
+    severity: 1
+    debounce_s: 1.0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 5
+      window_s: 10.0
+      to: 2
+
+  - name: "CouldntTransitionMotorsToSwitchOnDisabled"
+    code: "111"
+    description: "Couldn't transition all motors to SWITCH_ON_DISABLED"
+    remedy: ""
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+
+  - name: "EthercatStateTransitionFailed"
+    code: "112"
+    description: "Couldn't transition EtherCAT network to state:'{state}'"
+    remedy: ""
+    severity: 0
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 1
+
+  - name: "MotorNoDecodableState"
+    code: "113"
+    description: "Motor '{motor_id}' has no decodable state: '{statusword}'"
+    remedy: ""
+    severity: 0
+    debounce_s: 1.0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 10.0
+      to: 1
+
+  - name: "MotorInFault"
+    code: "114"
+    description: "Motor '{motor_id}' is in fault state"
+    remedy: ""
+    severity: 1
+    debounce_s: 1.0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 5
+      window_s: 10.0
+      to: 2
+
+  - name: "CouldntTransitionMotorsInTime"
+    code: "115"
+    description: "Couldn't transition motors to target state in time"
+    remedy: ""
+    severity: 1
+    debounce_s: 0
+    auto_clear_s: 30.0
+
+    escalate:
+      count: 10
+      window_s: 120.0
+      to: 2
+
+  - name: "CouldntInitEthercat"
+    code: "116"
     description: "Couldn't init EtherCAT, due to EXIT_FAILURE in ec_manager.cpp"
     remedy: "Watch for other errors, especialy SOEM errors."
     severity: 2
@@ -155,5 +272,3 @@ runtime:
     # error_handler:
     #   - name: ReInitEtherCAT
     #     description: "Calling the init EtherCAT service again, chance of success is low, issue prob somewhere else"
-
-  
