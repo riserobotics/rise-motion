@@ -22,6 +22,12 @@ add_executable(
 	src/ethercat_node.cpp
   src/cia402.cpp
 )
+
+set_target_properties(rise_motion_main PROPERTIES
+  BUILD_RPATH "\$ORIGIN/../../../rise_motion_messages/lib;/opt/ros/jazzy/lib"
+  INSTALL_RPATH "\$ORIGIN/../../../rise_motion_messages/lib;/opt/ros/jazzy/lib"
+)
+
 ament_target_dependencies(
 	rise_motion_main
 	rclcpp

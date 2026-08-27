@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(rise_motion_messages)
 
+set(CMAKE_BUILD_RPATH "\$ORIGIN;/opt/ros/jazzy/lib")
+set(CMAKE_INSTALL_RPATH "\$ORIGIN;/opt/ros/jazzy/lib")
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -17,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotorFeedbackFull.msg"
   "msg/AdmittanceDebug.msg"
   "msg/MotorVelocity.msg"
+  "msg/MotorTorqueOffset.msg"
   "srv/EnableEthercatSrv.srv"
   "srv/SDOReadSrv.srv"
   "srv/SDOWriteSrv.srv"
