@@ -38,6 +38,29 @@ target_link_libraries(
 	soem
 )
 
+if(DEFINED ENV{MOTION_USE_EXTERNAL_CONFIG} AND "$ENV{MOTION_USE_EXTERNAL_CONFIG}" STREQUAL "1")
+  message(NOTE "using values from external config package")
+
+  find_package(config REQUIRED)
+
+  target_link_libraries(
+    rise_motion_main
+    config::config_settings
+  )
+
+  target_compile_definitions(
+    rise_motion_main
+    PRIVATE EXTERNAL_CONFIG_AVAILABLE=1
+  )
+else()
+  message(WARNING "no external config package defined: using values from local rise_motion/config.hpp")
+
+  target_compile_definitions(
+    rise_motion_main
+    PRIVATE EXTERNAL_CONFIG_AVAILABLE=0
+  )
+endif()
+
 #target_link_options(rise_motion_main PRIVATE -Wl,-rpath,/hello/home/rise/Projects/rise-motion/rise_motion_dev_ws/install/rise_motion_messages/lib)
 install(TARGETS
   rise_motion_main
