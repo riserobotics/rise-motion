@@ -105,6 +105,25 @@ void ECManager::cyclic_loop() {
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
 
+  // receive valid PDO data to update PositionValue to current position
+  const auto timeout = std::chrono::seconds(1);
+  const auto start = std::chrono::steady_clock::now();
+  int wkc = 0;
+  do {
+    ecx_send_processdata(&ctx);
+    wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+
+    if (std::chrono::steady_clock::now() - start > timeout) 
+    {
+      RCLCPP_ERROR(logger, "Couldn't receive valid PDO data in time");
+      shutdown();
+      return;
+    }
+
+    std::this_thread::sleep_for(period);
+  }
+  while (wkc <= 0);
+
   // Configuring Drives
   for (size_t i = 0; i < motors.size(); i++) {
     CiA402Motor &m = motors[i];
@@ -118,7 +137,7 @@ void ECManager::cyclic_loop() {
     RCLCPP_INFO(logger, "Configured Motor %zu: Init Position(%d)", i + 1,
                 m.inputs->PositionValue);
   }
-  
+
   // Transition to OPERATIONAL
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
   uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
