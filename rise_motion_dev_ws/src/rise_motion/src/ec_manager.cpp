@@ -105,14 +105,6 @@ void ECManager::cyclic_loop() {
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
 
-  // Transition to OPERATIONAL
-  // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
-  uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
-  if (reached_state != EC_STATE_OPERATIONAL) {
-    shutdown();
-    return;
-  }
-
   // Configuring Drives
   for (size_t i = 0; i < motors.size(); i++) {
     CiA402Motor &m = motors[i];
@@ -125,6 +117,14 @@ void ECManager::cyclic_loop() {
     m.outputs->TargetPosition = m.inputs->PositionValue;
     RCLCPP_INFO(logger, "Configured Motor %zu: Init Position(%d)", i + 1,
                 m.inputs->PositionValue);
+  }
+  
+  // Transition to OPERATIONAL
+  // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
+  uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
+  if (reached_state != EC_STATE_OPERATIONAL) {
+    shutdown();
+    return;
   }
 
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
