@@ -26,12 +26,15 @@ public:
   bool set_motor_values_apsa(const std::vector<int32_t>& motor_values);
 
   // Wrappers for SOEM ecx_SDOwrite, ecx_SDOread
-  bool sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
+  bool sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8> &value, uint8 value_size);
   bool sdo_write(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
+  bool check_sdo_value(uint16 device_id, uint16 index, uint8 subindex, const std::vector<uint8> &expected);
 
 private:
   uint16 transition_ec(uint16 state);
   bool transition_motors_to(CiA402Motor::State state);
+  bool set_pdo_map(uint16 device_id, uint16 map_index, const std::vector<pdoMap::PDOMappingEntry> &entries);
+  bool config_pdo_mapping(uint16 device_id);
   void shutdown();
 
   // EtherCAT context and configuration

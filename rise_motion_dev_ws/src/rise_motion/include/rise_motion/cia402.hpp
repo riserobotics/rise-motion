@@ -2,8 +2,99 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <osal_defs.h>
+
+namespace pdoMap{
+
+  using PDOMappingEntry = std::vector<std::uint8_t>;
+
+  inline PDOMappingEntry u8(std::uint8_t value) {
+    return {value};
+  }
+
+  inline PDOMappingEntry u16(std::uint16_t value) {
+    return {
+        static_cast<std::uint8_t>(value & 0xFF),
+        static_cast<std::uint8_t>((value >> 8) & 0xFF),
+    };
+  }
+
+  inline PDOMappingEntry u32(std::uint32_t value) {
+    return {
+        static_cast<std::uint8_t>(value & 0xFF),
+        static_cast<std::uint8_t>((value >> 8) & 0xFF),
+        static_cast<std::uint8_t>((value >> 16) & 0xFF),
+        static_cast<std::uint8_t>((value >> 24) & 0xFF),
+    };
+  }
+
+
+  inline const std::vector<PDOMappingEntry> RX_PDO_1600 = {
+    u32(0x60400010), // Controlword
+    u32(0x60600008), // Modes of operation
+    u32(0x60710010), // Target torque
+    u32(0x607A0020), // Target position
+    u32(0x60FF0020), // Target velocity
+    u32(0x60B20010), // Torque offset
+    u32(0x27010020), // Tuning command
+  };
+
+  inline const std::vector<PDOMappingEntry> RX_PDO_1601 = {
+      u32(0x60FE0120), // Physical outputs
+      u32(0x60FE0220), // Bit mask
+  };
+
+  inline const std::vector<PDOMappingEntry> RX_PDO_1602 = {
+      u32(0x27030020), // User MOSI
+      u32(0x60B10020), // Velocity offset
+  };
+
+
+  inline const std::vector<PDOMappingEntry> TX_PDO_1A00 = {
+      u32(0x60410010), // Statusword
+      u32(0x60610008), // Modes of operation display
+      u32(0x60640020), // Position actual
+      u32(0x606C0020), // Velocity actual
+      u32(0x60770010), // Torque actual
+  };
+
+  inline const std::vector<PDOMappingEntry> TX_PDO_1A01 = {
+      u32(0x24010010), // Analog input 1
+      u32(0x24020010), // Analog input 2
+      u32(0x24030010), // Analog input 3
+      u32(0x24040010), // Analog input 4
+      u32(0x27020020), // Tuning status
+  };
+
+  inline const std::vector<PDOMappingEntry> TX_PDO_1A02 = {
+      u32(0x60FD0020), // Digital inputs
+  };
+
+  inline const std::vector<PDOMappingEntry> TX_PDO_1A03 = {
+      u32(0x27040020), // User MISO
+      u32(0x20F00020), // Timestamp
+      u32(0x60FC0020), // Position demand internal
+      u32(0x606B0020), // Velocity demand
+      u32(0x60740010), // Torque demand
+  };
+
+
+  inline const std::vector<PDOMappingEntry> RX_ASSIGNMENT = {
+      u16(0x1600),
+      u16(0x1601),
+      u16(0x1602),
+  };
+
+  inline const std::vector<PDOMappingEntry> TX_ASSIGNMENT = {
+      u16(0x1A00),
+      u16(0x1A01),
+      u16(0x1A02),
+      u16(0x1A03),
+  };
+}
+
 
 OSAL_PACKED_BEGIN
 typedef struct OSAL_PACKED {
