@@ -18,6 +18,8 @@ struct {
   int slavecount = 1;
 } config;
 
+ECManager *ECManager::callback_instance_ = nullptr;
+
 ECManager::ECManager(const std::string interface, int cycle_time)
     : interface(interface), logger(rclcpp::get_logger("ECManager")),
       next(std::chrono::steady_clock::now()),
@@ -57,12 +59,8 @@ int ECManager::init_ec() {
     return EXIT_FAILURE;
   }
 
-  RCLCPP_INFO(logger, "Configure PDO mapping");
   for (int i = 1; i <= ctx.slavecount; i++) {
-    if (!config_pdo_mapping(i)) {
-      RCLCPP_ERROR(logger, "PDO configuration failed for drive %d", i);
-      return EXIT_FAILURE;
-    }
+    ctx.slavelist[i].PO2SOconfig = &ECManager::config_pdo_mapping_callback; 
   }
 
   RCLCPP_INFO(logger, "Mapping IO");
@@ -335,7 +333,8 @@ uint16 ECManager::transition_ec(uint16 state) {
   return reached_state;
 }
 
-bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8> &value, uint8 value_size) {
+bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
+                         std::vector<uint8> &value, uint8 value_size) {
 
   int psize = value_size;
   uint8 *buf = new uint8[psize];
@@ -357,7 +356,8 @@ bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex, std::ve
   return true;
 }
 
-bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8> &value) {
+bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
+                          std::vector<uint8> &value) {
   if (value.empty()){
     RCLCPP_ERROR(logger, "Tried to write empty SDO value: device_id=%d object=0x%04x:%d", device_id, index, subindex);
 
@@ -505,4 +505,13 @@ bool ECManager::config_pdo_mapping(uint16 device_id) {
   RCLCPP_INFO(logger, "PDO mapping configured for drive %d", device_id);
 
   return true;
+}
+
+int ECManager::config_pdo_mapping_callback(ecx_contextt *ctx, uint16 device_id) {
+  if (callback_instance_ == nullptr) {
+    RCLCPP_ERROR(rclcpp::get_logger("ECManager"), "config_pdo_mapping_callback called but callback_instance_ is null");
+    return 0;
+  }
+
+  return callback_instance_->config_pdo_mapping(device_id) ? 1 : 0;
 }

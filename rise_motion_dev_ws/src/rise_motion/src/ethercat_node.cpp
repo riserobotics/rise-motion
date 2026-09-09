@@ -117,7 +117,8 @@ void EthercatNode::sdoReadServiceCallback(
   }
 
   std::vector<uint8> value;
-  bool success = ec_manager_.sdo_read(request->device_id, request->index, request->subindex, value, request->value_size);
+  bool success = ec_manager_.sdo_read(request->device_id, request->index,
+				      request->subindex, value, request->value_size);
 
     if (!success) {
     RCLCPP_WARN(get_logger(), "Read failed");
@@ -156,5 +157,5 @@ void EthercatNode::sdoWriteServiceCallback(
   response->device_id	= request->device_id;
   response->index	= request->index;
   response->subindex	= request->subindex;
-  response->value_type	= 0;
+  response->value_type = request->value_type;
 }
