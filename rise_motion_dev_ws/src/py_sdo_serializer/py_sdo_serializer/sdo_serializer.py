@@ -22,7 +22,7 @@ class TypeInfo:
     see see ETG.1000.6, ETG.1020 at https://www.ethercat.org/en/downloads.html.
     """
 
-    index: int            # EtherCAT object-dictionary type index
+    index: int            # EtherCAT datatype index
     name: str             # ETG long name  (e.g. 'INTEGER16')
     base_data_type: str   # IEC / short name  (e.g. 'INT')
     bit_size: int         # Canonical bit width
