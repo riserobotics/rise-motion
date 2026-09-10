@@ -209,22 +209,19 @@ def serialize(
     :rtype:
         list[int]
     """
-    try:
-        object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
+    object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
 
-        # serialize a base data type
-        if object_info.base_data_type[0:5] != 'ARRAY':
-            return globals()[object_info.serialize_fn](
-                value, object_info.bit_size)
-        # serialize a base data type list (imagine this: base_data_type[])
-        else:  
-            out = []
-            for item in value:
-                out.extend(globals()[object_info.serialize_fn](
-                    item, object_info.bit_size))
-            return out
-    except:
-        return -1
+    # serialize a base data type
+    if object_info.base_data_type[0:5] != 'ARRAY':
+        return globals()[object_info.serialize_fn](
+            value, object_info.bit_size)
+    # serialize a base data type list (imagine this: base_data_type[])
+    else:  
+        out = []
+        for item in value:
+            out.extend(globals()[object_info.serialize_fn](
+                item, object_info.bit_size))
+        return out
 
 def deserialize(
     serialized_value: list[int],
@@ -253,36 +250,33 @@ def deserialize(
     :returns:
         Deserialized value as a fitting python data type.
     """
-    try:
-        if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
-            raise TypeError(f"serialized_value must be a list[int] not {type(serialized_value)} {serialized_value}")
-        object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
-        byte_len = (object_info.bit_size + 7) // 8
-        isArray = object_info.base_data_type[0:5] == 'ARRAY'
-        
-        # check if size of variably sized serialized object is plausible
-        if object_info.name[-6:] == 'STRING' or isArray:
-            if len(serialized_value)%byte_len != 0:
-                raise ValueError(
-                    f"Number of bytes needed to contain variably sized list of Base Data Types must be" 
-                    'evenly divisible by the byte-size of those Base Data Types.')
-        # check if size of serialized object is correct
-        else:
-            if byte_len != len(serialized_value):
-                raise ValueError(
-                    f"Number of bytes needed to contain object_info.bit_size must be equal to serialized_value length.")
+    if not isinstance(serialized_value, list) or not all(isinstance(b, int) for b in serialized_value):
+        raise TypeError(f"serialized_value must be a list[int] not {type(serialized_value)} {serialized_value}")
+    object_info = get_type_info(index=index, name=name, base_data_type=base_data_type)
+    byte_len = (object_info.bit_size + 7) // 8
+    isArray = object_info.base_data_type[0:5] == 'ARRAY'
+    
+    # check if size of variably sized serialized object is plausible
+    if object_info.name[-6:] == 'STRING' or isArray:
+        if len(serialized_value)%byte_len != 0:
+            raise ValueError(
+                f"Number of bytes needed to contain variably sized list of Base Data Types must be" 
+                'evenly divisible by the byte-size of those Base Data Types.')
+    # check if size of serialized object is correct
+    else:
+        if byte_len != len(serialized_value):
+            raise ValueError(
+                f"Number of bytes needed to contain object_info.bit_size must be equal to serialized_value length.")
 
-        # deserialize a serialized base data type
-        if not isArray:
-            return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)    
-        # deserialize a serialized base data type array (imagine this: base_data_type[])
-        else:
-            out = []
-            for i in range(0, len(serialized_value), byte_len):
-                out.append(globals()[object_info.deserialize_fn](serialized_value[i:i+byte_len], object_info.bit_size))
-            return out
-    except:
-        return -1
+    # deserialize a serialized base data type
+    if not isArray:
+        return globals()[object_info.deserialize_fn](serialized_value, object_info.bit_size)    
+    # deserialize a serialized base data type array (imagine this: base_data_type[])
+    else:
+        out = []
+        for i in range(0, len(serialized_value), byte_len):
+            out.append(globals()[object_info.deserialize_fn](serialized_value[i:i+byte_len], object_info.bit_size))
+        return out
 
 # ---------------------------------------------------------------------------
 # Specific functions (called by generic functions)
