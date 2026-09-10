@@ -18,6 +18,8 @@ struct {
   int slavecount = 1;
 } config;
 
+ECManager *ECManager::callback_instance_ = nullptr;
+
 ECManager::ECManager(const std::string interface, int cycle_time)
     : interface(interface), logger(rclcpp::get_logger("ECManager")),
       next(std::chrono::steady_clock::now()),
@@ -25,6 +27,8 @@ ECManager::ECManager(const std::string interface, int cycle_time)
 
 int ECManager::init_ec() {
   int ret;
+
+  callback_instance_ = this;
 
   memset(&ctx, 0, sizeof(ctx));
   memset(IOMap, 0, sizeof(IOMap));
@@ -55,6 +59,10 @@ int ECManager::init_ec() {
     RCLCPP_ERROR(logger, "Expected %d devices, but discovered %d",
                  config.slavecount, ctx.slavecount);
     return EXIT_FAILURE;
+  }
+
+  for (int i = 1; i <= ctx.slavecount; i++) {
+    ctx.slavelist[i].PO2SOconfig = &ECManager::config_pdo_mapping_callback; 
   }
 
   RCLCPP_INFO(logger, "Mapping IO");
@@ -105,13 +113,24 @@ void ECManager::cyclic_loop() {
   std::vector<int32_t> motor_commands(ctx.slavecount, 0);
   std::vector<int32_t> motor_feedback(ctx.slavecount, 0);
 
-  // Transition to OPERATIONAL
-  // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
-  uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
-  if (reached_state != EC_STATE_OPERATIONAL) {
-    shutdown();
-    return;
+  // receive valid PDO data to update PositionValue to current position
+  const auto timeout = std::chrono::seconds(1);
+  const auto start = std::chrono::steady_clock::now();
+  int wkc = 0;
+  do {
+    ecx_send_processdata(&ctx);
+    wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
+
+    if (std::chrono::steady_clock::now() - start > timeout) 
+    {
+      RCLCPP_ERROR(logger, "Couldn't receive valid PDO data in time");
+      shutdown();
+      return;
+    }
+
+    std::this_thread::sleep_for(period);
   }
+  while (wkc <= 0);
 
   // Configuring Drives
   for (size_t i = 0; i < motors.size(); i++) {
@@ -125,6 +144,14 @@ void ECManager::cyclic_loop() {
     m.outputs->TargetPosition = m.inputs->PositionValue;
     RCLCPP_INFO(logger, "Configured Motor %zu: Init Position(%d)", i + 1,
                 m.inputs->PositionValue);
+  }
+
+  // Transition to OPERATIONAL
+  // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
+  uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
+  if (reached_state != EC_STATE_OPERATIONAL) {
+    shutdown();
+    return;
   }
 
   // Transitioning CiA402 State Machine to OPERATION_ENABLED
@@ -309,34 +336,60 @@ uint16 ECManager::transition_ec(uint16 state) {
 }
 
 bool ECManager::sdo_read(uint16 device_id, uint16 index, uint8 subindex,
-                         std::vector<uint8> &value) {
-  int psize = 64;
+                         std::vector<uint8> &value, uint8 value_size) {
+
+  int psize = value_size;
   uint8 *buf = new uint8[psize];
 
   boolean CA = FALSE;
-  int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize,
-                        (void *)buf, EC_TIMEOUTRXM);
+  int wkc = ecx_SDOread(&ctx, device_id, index, subindex, CA, &psize, (void *)buf, EC_TIMEOUTRXM);
+
+  if (wkc <= 0) {
+    RCLCPP_ERROR(logger, "SDO read failed: device_id=%d object=0x%04x:%d", device_id, index, subindex);
+
+    return false;
+  }
 
   value.clear();
   for (int i = 0; i < psize; i++) {
     value.push_back(buf[i]);
   }
-  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
-  //  return (wkc == expectedWKC);
+  
   return true;
 }
 
 bool ECManager::sdo_write(uint16 device_id, uint16 index, uint8 subindex,
                           std::vector<uint8> &value) {
+  if (value.empty()){
+    RCLCPP_ERROR(logger, "Tried to write empty SDO value: device_id=%d object=0x%04x:%d", device_id, index, subindex);
+
+    return false;
+  }
+
   int psize = value.size();
-  uint8 *buf = new uint8[psize];
+  uint8 *buf = &value[0];
 
   boolean CA = FALSE;
-  int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize,
-                         (void *)buf, EC_TIMEOUTRXM);
-  RCLCPP_INFO(logger, "%d:%d", wkc, expectedWKC);
-  //  return (wkc == expectedWKC);
+  int wkc = ecx_SDOwrite(&ctx, device_id, index, subindex, CA, psize, (void *)buf, EC_TIMEOUTRXM);
+  
+  if (wkc <= 0) {
+    RCLCPP_ERROR(logger, "SDO write failed: device_id=%d object=0x%04x:%d", device_id, index, subindex);
+
+    return false;
+  }
+
   return true;
+}
+
+bool ECManager::check_sdo_value(uint16 device_id, uint16 index, uint8 subindex, const std::vector<uint8> &expected) {
+
+  std::vector<uint8> actual;
+
+  if (!sdo_read(device_id, index, subindex, actual, expected.size())) {
+    return false;
+  }
+
+  return actual == expected;
 }
 
 bool ECManager::transition_motors_to(CiA402Motor::State state) {
@@ -372,4 +425,95 @@ bool ECManager::transition_motors_to(CiA402Motor::State state) {
     return false;
   }
   return true;
+}
+
+bool ECManager::set_pdo_map(uint16 device_id, uint16 map_index, const std::vector<pdoMap::PDOMappingEntry> &entries) {
+
+  if (entries.size() > UINT8_MAX) {
+    RCLCPP_ERROR(logger, "Too many entries for PDO map 0x%04x", map_index);
+
+    return false;
+  }
+
+  auto count = pdoMap::u8(0);
+
+  // disable PDO map
+  if (!sdo_write(device_id, map_index, 0, count)) {
+    return false;
+  }
+
+  // set mapping
+  for (size_t i = 0; i < entries.size(); ++i) {
+    auto entry = entries[i];
+
+    if (!sdo_write(device_id, map_index, static_cast<uint8>(i + 1), entry)) {
+      return false;
+    }
+  }
+
+  // enable number of defined entries
+  count = pdoMap::u8(entries.size());
+
+  if (!sdo_write(device_id, map_index, 0, count)) {
+    return false;
+  }
+
+  // check number of enabled entries
+  if (!check_sdo_value(device_id, map_index, 0, count)) {
+    return false;
+  }
+
+  // check entries
+  for (size_t i = 0; i < entries.size(); ++i) {
+    if (!check_sdo_value(device_id, map_index, static_cast<uint8>(i + 1), entries[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool ECManager::config_pdo_mapping(uint16 device_id) {
+  RCLCPP_INFO(logger, "Configuring PDO mapping for device_id %d", device_id);
+
+  // disable current PDO maps
+  auto disabled = pdoMap::u8(0);
+
+  if (!sdo_write(device_id, 0x1C12, 0, disabled) || !sdo_write(device_id, 0x1C13, 0, disabled)) {
+    RCLCPP_ERROR(logger, "Couldn't disable PDO assignments for device_id %d", device_id);
+    return false;
+  }
+
+  // set RxPDO: master -> drive
+  if (!set_pdo_map(device_id, 0x1600, pdoMap::RX_PDO_1600) || !set_pdo_map(device_id, 0x1601, pdoMap::RX_PDO_1601) ||
+      !set_pdo_map(device_id, 0x1602, pdoMap::RX_PDO_1602)) {
+    RCLCPP_ERROR(logger, "Couldn't configure RxPDOs for device_id %d", device_id);
+    return false;
+  }
+
+  // set TxPDO: drive -> master
+  if (!set_pdo_map(device_id, 0x1A00, pdoMap::TX_PDO_1A00) || !set_pdo_map(device_id, 0x1A01, pdoMap::TX_PDO_1A01) ||
+      !set_pdo_map(device_id, 0x1A02, pdoMap::TX_PDO_1A02) || !set_pdo_map(device_id, 0x1A03, pdoMap::TX_PDO_1A03)) {
+    RCLCPP_ERROR(logger, "Couldn't configure TxPDOs for device_id %d", device_id);
+    return false;
+  }
+
+  // enable PDO maps
+  if (!set_pdo_map(device_id, 0x1C12, pdoMap::RX_ASSIGNMENT) || !set_pdo_map(device_id, 0x1C13, pdoMap::TX_ASSIGNMENT)) {
+    RCLCPP_ERROR(logger, "Couldn't configure PDO assignments for device_id %d", device_id);
+    return false;
+  }
+
+  RCLCPP_INFO(logger, "PDO mapping configured for drive %d", device_id);
+
+  return true;
+}
+
+int ECManager::config_pdo_mapping_callback(ecx_contextt *ctx, uint16 device_id) {
+  if (callback_instance_ == nullptr) {
+    RCLCPP_ERROR(rclcpp::get_logger("ECManager"), "config_pdo_mapping_callback called but callback_instance_ is null");
+    return 0;
+  }
+
+  return callback_instance_->config_pdo_mapping(device_id) ? 1 : 0;
 }
