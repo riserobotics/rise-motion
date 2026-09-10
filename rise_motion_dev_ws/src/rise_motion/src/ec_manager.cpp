@@ -28,6 +28,8 @@ ECManager::ECManager(const std::string interface, int cycle_time)
 int ECManager::init_ec() {
   int ret;
 
+  callback_instance_ = this;
+
   memset(&ctx, 0, sizeof(ctx));
   memset(IOMap, 0, sizeof(IOMap));
 
