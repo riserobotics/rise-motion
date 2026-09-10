@@ -133,6 +133,7 @@ void EthercatNode::sdoReadServiceCallback(
   response->value	= value;
   response->value_type = request->value_type;
 }
+
 void EthercatNode::sdoWriteServiceCallback(
     const std::shared_ptr<rise_motion_messages::srv::SDOWriteSrv::Request>
 	request,
