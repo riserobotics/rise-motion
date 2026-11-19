@@ -102,14 +102,14 @@
                     "editor.formatOnSave": true
                 },
                 "python.autoComplete.extraPaths": [
-                    "${workspaceFolder}/riseos_ws/build/config",
-                    "${workspaceFolder}/riseos_ws/install/config/lib/python3.12/site-packages",
-                    "${workspaceFolder}/riseos_ws/install/error/lib/python3.12/site-packages"
+                    "${workspaceFolder}/rise_motion_dev_ws/build/config",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/config/lib/python3.12/site-packages",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/error/lib/python3.12/site-packages"
                 ],
                 "python.analysis.extraPaths": [
-                    "${workspaceFolder}/riseos_ws/build/config",
-                    "${workspaceFolder}/riseos_ws/install/config/lib/python3.12/site-packages",
-                    "${workspaceFolder}/riseos_ws/install/error/lib/python3.12/site-packages"
+                    "${workspaceFolder}/rise_motion_dev_ws/build/config",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/config/lib/python3.12/site-packages",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/error/lib/python3.12/site-packages"
                 ]
             }
         }
