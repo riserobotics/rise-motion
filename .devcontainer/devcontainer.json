@@ -1,0 +1,120 @@
+{
+    "image": "ghcr.io/riserobotics/rise-os:latest",
+    "name": "RISE-MOTION-DEV",
+    "mounts": [
+        // Mount devices
+        "type=bind,source=/dev,target=/dev",
+
+        // Mount hostnames
+        "type=bind,source=/etc/hosts,target=/etc/hosts"
+    ],
+
+    // Docker Run arguments
+    "runArgs": [
+        // Interactive terminal
+        "-it",
+
+        // Remove container after exit
+        "--rm",
+
+        // Privileged mode for device access
+        "--privileged",
+
+        // Network settings -> host network bridged to container
+        "--net=host",
+
+        // Mount X11 socket
+        "-v",
+        "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+    ],
+
+    // Environment variables inside the container
+    "containerEnv": {
+        // Display settings for X11 forwarding
+        "DISPLAY": "${localEnv:DISPLAY}",
+
+        // Prevents Qt GUI crashes
+        "QT_X11_NO_MITSHM": "1"
+    },
+
+    // VS Code extensions and settings
+    "customizations": {
+        "vscode": {
+
+            // Extensions to install in the container
+            "extensions": [
+                // Python
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.flake8",
+                "matangover.mypy",
+
+                // Ruff linter
+                "charliermarsh.ruff",
+
+                // C++
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+
+                // ROS2
+                "smilerobotics.urdf",
+                "RanchHandRobotics.robot-developer-extensions-ros2",
+
+                // YAML
+                "redhat.vscode-yaml",
+
+                // TOML
+                "tamasfe.even-better-toml",
+
+                // Git
+                "mhutchie.git-graph",
+                "waderyan.gitblame",
+                "Exelord.git-commits",
+
+                // Markdown
+                "DavidAnson.vscode-markdownlint",
+                "yzhang.markdown-all-in-one",
+
+                // Docker
+                "ms-azuretools.vscode-docker",
+
+                // Tasks
+                "SanaAjani.taskrunnercode",
+
+                // AI
+                "GitHub.copilot",
+                "GitHub.copilot-chat"
+            ],
+
+            // VS-Code settings to apply in the container
+            "settings": {
+
+                // Python settings
+                "python.formatting.provider": "none",
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": false,
+                "python.linting.flake8Enabled": true,
+                "editor.insertSpaces": false,
+                "editor.tabSize": 4,
+                "editor.detectIndentation": true,
+                "[python]": {
+                    "editor.defaultFormatter": "ms-python.python",
+                    "editor.formatOnSave": true
+                },
+                "python.autoComplete.extraPaths": [
+                    "${workspaceFolder}/rise_motion_dev_ws/build/config",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/config/lib/python3.12/site-packages",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/error/lib/python3.12/site-packages"
+                ],
+                "python.analysis.extraPaths": [
+                    "${workspaceFolder}/rise_motion_dev_ws/build/config",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/config/lib/python3.12/site-packages",
+                    "${workspaceFolder}/rise_motion_dev_ws/install/error/lib/python3.12/site-packages"
+                ]
+            }
+        }
+    },
+
+    // Run startup script after container starts
+    "postStartCommand": "/tmp/startup.sh"
+}
