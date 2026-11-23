@@ -7,6 +7,8 @@
 #include <rise_motion_messages/srv/sdo_read_srv.hpp>
 #include <rise_motion_messages/srv/sdo_write_srv.hpp>
 #include <thread>
+#include <rise_motion/node_fsm.hpp>
+#include <rise_motion_messages/msg/state_current_msg.hpp>
 
 class EthercatNode : public rclcpp::Node {
 public:
@@ -17,7 +19,9 @@ private:
   ECManager& ec_manager_;
   std::unique_ptr<std::thread> ec_thread_;
   bool ethercat_enabled_{false};
+  StateMachine fsm_;
 
+  rclcpp::Publisher<rise_motion_messages::msg::StateCurrentMsg>::SharedPtr state_publisher_;
   rclcpp::Subscription<rise_motion_messages::msg::MotorPositions>::SharedPtr cmd_sub_;
   rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr feedback_pub_;
   rclcpp::TimerBase::SharedPtr feedback_timer_;
@@ -25,7 +29,7 @@ private:
   rclcpp::Service<rise_motion_messages::srv::SDOReadSrv>::SharedPtr sdo_read_srv_;
   rclcpp::Service<rise_motion_messages::srv::SDOWriteSrv>::SharedPtr sdo_write_srv_;
 
-
+  void transition_state(StateMachine::Event event);
   void commandCallback(const rise_motion_messages::msg::MotorPositions::SharedPtr msg);
   void publishFeedback();
   void enableServiceCallback(

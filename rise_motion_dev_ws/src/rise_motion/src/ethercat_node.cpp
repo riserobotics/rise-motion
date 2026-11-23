@@ -10,6 +10,9 @@ using std::placeholders::_2;
 EthercatNode::EthercatNode(ECManager &ec_manager)
     : Node("ethercat_node"), ec_manager_(ec_manager) {
 
+  state_publisher_ = create_publisher<rise_motion_messages::msg::StateCurrentMsg>(
+      "rise_motion_state_changes", 10);
+
   cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorPositions>(
       "motor_commands", 10,
       std::bind(&EthercatNode::commandCallback, this, _1));
@@ -42,6 +45,20 @@ EthercatNode::~EthercatNode() {
     if (ec_thread_ && ec_thread_->joinable()) {
       ec_thread_->join();
     }
+  }
+}
+
+void EthercatNode::transition_state(StateMachine::Event event) {
+  auto previous_state = fsm_.get_state();
+  auto new_state = fsm_.handle_event(event);
+
+  if (previous_state != new_state) {
+    rise_motion_messages::msg::StateCurrentMsg msg;
+
+    msg.previous_state = static_cast<uint8_t>(previous_state);
+    msg.current_state = static_cast<uint8_t>(new_state);
+
+    state_publisher_->publish(msg);
   }
 }
 
