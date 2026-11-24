@@ -31,7 +31,7 @@ EthercatNode::EthercatNode(ECManager &ec_manager)
   });
 
   state_publisher_ = create_publisher<rise_motion_messages::msg::StateCurrentMsg>(
-      "rise_motion_state_changes", 10);
+      "rise_motion_state_changes", rclcpp::QoS(1).reliable().transient_local());
 
   cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorPositions>(
       "motor_commands", 10,
