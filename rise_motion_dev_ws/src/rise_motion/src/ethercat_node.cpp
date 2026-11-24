@@ -10,6 +10,29 @@ using std::placeholders::_2;
 EthercatNode::EthercatNode(ECManager &ec_manager)
     : Node("ethercat_node"), ec_manager_(ec_manager) {
 
+  ec_manager_.set_state_callback([this](ECManager::StateEvent event) {
+      switch (event) {
+          case ECManager::StateEvent::Initialized:
+              transition_state(StateMachine::Event::ToInitialized);
+              break;
+
+          case ECManager::StateEvent::MotionEnabled:
+              transition_state(StateMachine::Event::ToOperational);
+              break;
+
+          case ECManager::StateEvent::MotionDisabled:
+              transition_state(StateMachine::Event::ToInitialized);
+              break;
+
+          case ECManager::StateEvent::Error:
+              transition_state(StateMachine::Event::ToError);
+              break;
+      }
+  });
+
+  state_publisher_ = create_publisher<rise_motion_messages::msg::StateCurrentMsg>(
+      "rise_motion_state_changes", rclcpp::QoS(1).reliable().transient_local());
+
   cmd_sub_ = create_subscription<rise_motion_messages::msg::MotorPositions>(
       "motor_commands", 10,
       std::bind(&EthercatNode::commandCallback, this, _1));
@@ -24,6 +47,10 @@ EthercatNode::EthercatNode(ECManager &ec_manager)
   enable_srv_ = create_service<rise_motion_messages::srv::EnableEthercatSrv>(
       "enable_ethercat",
       std::bind(&EthercatNode::enableServiceCallback, this, _1, _2));
+
+  enable_motion_srv_ = create_service<std_srvs::srv::SetBool>(
+    "enable_motion",
+    std::bind(&EthercatNode::enableMotionServiceCallback, this, _1, _2));
 
   sdo_read_srv_ = create_service<rise_motion_messages::srv::SDOReadSrv>(
       "sdo_read",
@@ -42,6 +69,22 @@ EthercatNode::~EthercatNode() {
     if (ec_thread_ && ec_thread_->joinable()) {
       ec_thread_->join();
     }
+  }
+}
+
+void EthercatNode::transition_state(StateMachine::Event event) {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+
+  auto previous_state = fsm_.get_state();
+  auto new_state = fsm_.handle_event(event);
+
+  if (previous_state != new_state) {
+    rise_motion_messages::msg::StateCurrentMsg msg;
+
+    msg.previous_state = static_cast<uint8_t>(previous_state);
+    msg.current_state = static_cast<uint8_t>(new_state);
+
+    state_publisher_->publish(msg);
   }
 }
 
@@ -89,6 +132,7 @@ void EthercatNode::enableServiceCallback(
     RCLCPP_INFO(get_logger(), "Enabling EtherCAT communication");
     if (ec_manager_.init_ec() == EXIT_FAILURE) {
       RCLCPP_ERROR(get_logger(), "Couldn't init ethercat");
+      transition_state(StateMachine::Event::ToError);
     } else {
       ec_thread_ =
 	  std::make_unique<std::thread>(&ECManager::cyclic_loop, &ec_manager_);
@@ -104,6 +148,37 @@ void EthercatNode::enableServiceCallback(
   }
 
   response->status_enable = ethercat_enabled_ ? 1 : 0;
+}
+
+void EthercatNode::enableMotionServiceCallback(
+  const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+  std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
+
+  StateMachine::State current_state;
+  
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    current_state = fsm_.get_state();
+  }
+
+  if (request->data) {
+    if (current_state != StateMachine::State::Initialized) {
+      response->success = false;
+      response->message = "EtherCAT is not initialized";
+      return;
+    }
+
+    ec_manager_.request_motion_enable(true);
+
+    response->success = true;
+    response->message = "Activation of motor motion requested";
+
+  } else {
+    ec_manager_.request_motion_enable(false);
+
+    response->success = true;
+    response->message = "Deactivation of motor motion requested";
+  }
 }
 
 void EthercatNode::sdoReadServiceCallback(
