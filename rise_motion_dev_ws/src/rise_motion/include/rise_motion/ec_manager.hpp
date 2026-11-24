@@ -16,10 +16,21 @@ public:
   ECManager();
   ECManager(const std::string interface, int cycle_period_ms);
 
+  enum class StateEvent {
+    Initialized,
+    MotionEnabled,
+    MotionDisabled,
+    Error
+  };
+
+  void set_state_callback(std::function<void(StateEvent)> callback);
+
   int init_ec();
   void cyclic_loop();
   bool is_running();
   void stop();
+
+  void request_motion_enable(bool enable);
 
   // APSA-based motor value transfer (lock-free)
   bool get_motor_values_apsa(std::vector<int32_t>& motor_values);
@@ -30,6 +41,11 @@ public:
   bool sdo_write(uint16 device_id, uint16 index, uint8 subindex, std::vector<uint8>& value);
 
 private:
+  std::function<void(StateEvent)> state_callback_;
+  std::atomic<bool> motion_enable_requested_{false};
+
+  void notify_state_event(StateEvent event);
+
   uint16 transition_ec(uint16 state);
   bool transition_motors_to(CiA402Motor::State state);
   void shutdown();

@@ -23,6 +23,16 @@ ECManager::ECManager(const std::string interface, int cycle_time)
       next(std::chrono::steady_clock::now()),
       period(std::chrono::milliseconds(cycle_time)) {}
 
+void ECManager::set_state_callback(std::function<void(StateEvent)> callback) {
+  state_callback_ = std::move(callback);
+}
+
+void ECManager::notify_state_event(StateEvent event) {
+  if (state_callback_ != NULL) {
+    state_callback_(event);
+  }
+}
+
 int ECManager::init_ec() {
   int ret;
 
@@ -109,32 +119,14 @@ void ECManager::cyclic_loop() {
   // Ethercat needs to be operational before CiA402 is OPERATION_ENABLED
   uint16 reached_state = transition_ec(EC_STATE_OPERATIONAL);
   if (reached_state != EC_STATE_OPERATIONAL) {
+    notify_state_event(ECManager::StateEvent::Error);
     shutdown();
     return;
   }
 
-  // Configuring Drives
-  for (size_t i = 0; i < motors.size(); i++) {
-    CiA402Motor &m = motors[i];
-    // Setting ModeOfOperation to CyclicSyncPositionMode
-    m.set_mode_of_operation(
-        CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+  notify_state_event(StateEvent::Initialized);
+  bool motion_enabled = false;
 
-    // Set Position to Current Position
-    motor_commands[i] = m.inputs->PositionValue;
-    m.outputs->TargetPosition = m.inputs->PositionValue;
-    RCLCPP_INFO(logger, "Configured Motor %zu: Init Position(%d)", i + 1,
-                m.inputs->PositionValue);
-  }
-
-  // Transitioning CiA402 State Machine to OPERATION_ENABLED
-  if (!transition_motors_to(CiA402Motor::State::OPERATION_ENABLED)) {
-    RCLCPP_ERROR(logger, "Couldn't transition all motors to OPERATION_ENABLED");
-    shutdown();
-    return;
-  }
-
-  RCLCPP_INFO(logger, "All motors in operation_enabled");
 
   RCLCPP_INFO(logger, "Entering Cyclic Loop");
   next = std::chrono::steady_clock::now();
@@ -142,12 +134,58 @@ void ECManager::cyclic_loop() {
     int wkc;
     next += period;
 
+    // enable motor motion
+    if (motion_enable_requested_.load() && !motion_enabled) {
+
+      // Configuring Drives
+      for (size_t i = 0; i < motors.size(); i++) {
+        CiA402Motor &m = motors[i];
+        // Setting ModeOfOperation to CyclicSyncPositionMode
+        m.set_mode_of_operation(
+            CiA402Motor::ModeOfOperation::CyclicSyncPositionMode);
+
+        // Set Position to Current Position
+        motor_commands[i] = m.inputs->PositionValue;
+        m.outputs->TargetPosition = m.inputs->PositionValue;
+        RCLCPP_INFO(logger, "Configured Motor %zu: Init Position(%d)", i + 1,
+                    m.inputs->PositionValue);
+      }
+
+      // Transitioning CiA402 State Machine to OPERATION_ENABLED
+      if (!transition_motors_to(CiA402Motor::State::OPERATION_ENABLED)) {
+        RCLCPP_ERROR(logger, "Couldn't transition all motors to OPERATION_ENABLED");
+        notify_state_event(ECManager::StateEvent::Error);
+        shutdown();
+        return;
+      }
+
+      RCLCPP_INFO(logger, "All motors in operation_enabled");
+
+      motion_enabled = true;
+      notify_state_event(StateEvent::MotionEnabled);
+    }
+
+    // disable motor motion
+    if (!motion_enable_requested_.load() && motion_enabled) {
+
+      if (!transition_motors_to(CiA402Motor::State::SWITCH_ON_DISABLED)) {
+        RCLCPP_ERROR(logger, "Couldn't transition all motors to SWITCH_ON_DISABLED");
+        notify_state_event(StateEvent::Error);
+        shutdown();
+        return;
+      }
+
+      motion_enabled = false;
+      notify_state_event(StateEvent::MotionDisabled);
+    }
+
     ecx_send_processdata(&ctx);
     wkc = ecx_receive_processdata(&ctx, EC_TIMEOUTRET);
     ecx_mbxhandler(&ctx, 0, 4);
 
     if (wkc != expectedWKC) {
       RCLCPP_ERROR(logger, "Not all nodes responded");
+      notify_state_event(StateEvent::Error);
       shutdown();
       return;
     }
@@ -160,7 +198,7 @@ void ECManager::cyclic_loop() {
         RCLCPP_ERROR(logger, "Motor %zu has no state", i + 1);
         shutdown();
         return;
-      } else if (m.get_state().value() !=
+      } else if (motion_enabled && m.get_state().value() !=
                  CiA402Motor::State::OPERATION_ENABLED) {
         RCLCPP_ERROR(logger, "Motor %zu is not in OPERATION_ENABLED", i + 1);
         shutdown();
@@ -248,6 +286,10 @@ void ECManager::shutdown() {
 void ECManager::stop() { running_ = false; }
 
 bool ECManager::is_running() { return running_; }
+
+void ECManager::request_motion_enable(bool enable) {
+  motion_enable_requested_.store(enable);
+}
 
 bool ECManager::get_motor_values_apsa(std::vector<int32_t> &motor_values) {
   // comm_read() returns true if new data is available, false otherwise

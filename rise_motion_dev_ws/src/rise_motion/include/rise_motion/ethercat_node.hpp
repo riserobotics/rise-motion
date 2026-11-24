@@ -10,6 +10,7 @@
 #include <rise_motion/node_fsm.hpp>
 #include <rise_motion_messages/msg/state_current_msg.hpp>
 #include <mutex>
+#include <std_srvs/srv/set_bool.hpp>
 
 class EthercatNode : public rclcpp::Node {
 public:
@@ -28,6 +29,7 @@ private:
   rclcpp::Publisher<rise_motion_messages::msg::MotorPositions>::SharedPtr feedback_pub_;
   rclcpp::TimerBase::SharedPtr feedback_timer_;
   rclcpp::Service<rise_motion_messages::srv::EnableEthercatSrv>::SharedPtr enable_srv_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr enable_motion_srv_;
   rclcpp::Service<rise_motion_messages::srv::SDOReadSrv>::SharedPtr sdo_read_srv_;
   rclcpp::Service<rise_motion_messages::srv::SDOWriteSrv>::SharedPtr sdo_write_srv_;
 
@@ -37,6 +39,9 @@ private:
   void enableServiceCallback(
     const std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Request> request,
     std::shared_ptr<rise_motion_messages::srv::EnableEthercatSrv::Response> response);
+  void enableMotionServiceCallback(
+    const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+    std::shared_ptr<std_srvs::srv::SetBool::Response> response);
   void sdoReadServiceCallback(
       const std::shared_ptr<rise_motion_messages::srv::SDOReadSrv::Request>
 	  request,

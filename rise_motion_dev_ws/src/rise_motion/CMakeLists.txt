@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rise_motion_messages REQUIRED)
+find_package(std_srvs REQUIRED)
 
 include_directories(include)
 
@@ -26,6 +27,7 @@ ament_target_dependencies(
 	rise_motion_main
 	rclcpp
 	rise_motion_messages
+  std_srvs
 )
 target_link_libraries(
 	rise_motion_main
