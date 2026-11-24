@@ -9,6 +9,7 @@
 #include <thread>
 #include <rise_motion/node_fsm.hpp>
 #include <rise_motion_messages/msg/state_current_msg.hpp>
+#include <mutex>
 
 class EthercatNode : public rclcpp::Node {
 public:
@@ -20,6 +21,7 @@ private:
   std::unique_ptr<std::thread> ec_thread_;
   bool ethercat_enabled_{false};
   StateMachine fsm_;
+  std::mutex state_mutex_;
 
   rclcpp::Publisher<rise_motion_messages::msg::StateCurrentMsg>::SharedPtr state_publisher_;
   rclcpp::Subscription<rise_motion_messages::msg::MotorPositions>::SharedPtr cmd_sub_;

@@ -49,6 +49,8 @@ EthercatNode::~EthercatNode() {
 }
 
 void EthercatNode::transition_state(StateMachine::Event event) {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  
   auto previous_state = fsm_.get_state();
   auto new_state = fsm_.handle_event(event);
 
